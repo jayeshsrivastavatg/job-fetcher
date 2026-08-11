@@ -87,4 +87,64 @@ RECOVERY_PLANS.update({
             "browser_load_more_clicks": 20,
         },
     ],
+    "rakuten_india": [
+        {
+            "kind": "slow_official_html",
+            "entry_urls": [
+                "https://rakuten.openings.co/rakuten/jobslist",
+                "https://rakuten.openings.co/rakuten/",
+            ],
+            "default_location": "India",
+            "require_india": True,
+            "http_timeout_seconds": 90,
+            "max_pages": 30,
+            "job_href_patterns": [r"openings\.co/rakuten/jobview/"],
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://rakuten.openings.co/rakuten/jobslist",
+            "browser_timeout_ms": 90000,
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 12,
+        },
+    ],
+    "sony_tech_india": [
+        {
+            "kind": "slow_official_html",
+            "entry_url": "https://careers.sonyindiasoftware.co.in/sonyindiasoftware/",
+            "default_location": "India",
+            "require_india": True,
+            "http_timeout_seconds": 90,
+            "max_pages": 20,
+            "job_href_patterns": [r"sonyindiasoftware/jobview/"],
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://careers.sonyindiasoftware.co.in/sonyindiasoftware/",
+            "browser_timeout_ms": 90000,
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 12,
+        },
+    ],
+    "makemytrip": [
+        {
+            "kind": "slow_official_html",
+            "entry_urls": [
+                "https://careers.makemytrip.com/prod/careerPlaybook/software-engineering",
+                "https://careers.makemytrip.com/prod/",
+            ],
+            "default_location": "India",
+            "require_india": True,
+            "http_timeout_seconds": 90,
+            "max_pages": 25,
+            "job_href_patterns": [r"/prod/opportunity/[^/?#]+"],
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://careers.makemytrip.com/prod/careerPlaybook/software-engineering",
+            "browser_timeout_ms": 90000,
+            "browser_max_pages": 15,
+            "browser_max_scrolls": 10,
+        },
+    ],
 })
