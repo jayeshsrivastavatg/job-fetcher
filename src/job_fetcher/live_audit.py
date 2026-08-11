@@ -10,22 +10,18 @@ from typing import Any
 import requests
 
 from job_fetcher.config import load_config
+from job_fetcher.india_location import is_india_job
 from job_fetcher.job_quality import plausible_job, prefer_usable_jobs, strong_job_detail_url, valid_http_url
 from job_fetcher.service import jobs_used_browser
 from job_fetcher.sources.factory import build_source
 
 
-TRUSTED_CONFIGURED_SOURCES = {
-    "greenhouse", "lever", "ashby", "smartrecruiters", "workday", "oracle", "eightfold",
-    "successfactors", "kula", "apple", "meta", "amazon", "avature", "atlassian", "phenom",
-    "goldman", "trakstar", "custom_api",
-}
-TRUSTED_RECORD_SOURCES = {
-    "greenhouse", "lever", "ashby", "smartrecruiters", "workday", "oracle", "eightfold",
-    "successfactors", "kula", "apple", "meta", "amazon", "amazon_json", "avature",
-    "atlassian", "phenom", "goldman", "trakstar",
-}
 ACCESS_RESTRICTED = {401, 403, 429}
+# These public APIs return the whole board (Greenhouse/Lever/Ashby) rather than an
+# arbitrary first HTML page. Paginated providers such as Workday/SmartRecruiters
+# must additionally publish `_provider_complete=True` on their records.
+INTRINSICALLY_EXHAUSTIVE = {"greenhouse", "lever", "ashby"}
+PROVIDER_TOTAL_SOURCES = {"workday", "smartrecruiters", "intuit", "nutanix", "amazon_json"}
 
 
 @dataclass
@@ -51,48 +47,72 @@ def _check_url(url: str, timeout: float = 10.0) -> UrlCheck:
         return UrlCheck(url, None, False, False, "invalid_url")
     try:
         response = requests.get(
-            url,
-            timeout=timeout,
-            allow_redirects=True,
-            stream=True,
+            url, timeout=timeout, allow_redirects=True, stream=True,
             headers={"User-Agent": "Mozilla/5.0 JobFetcherSourceAudit/1.0"},
         )
         status = int(response.status_code)
         response.close()
         restricted = status in ACCESS_RESTRICTED
-        return UrlCheck(url, status, 200 <= status < 400 or restricted, restricted, None if 200 <= status < 400 else f"HTTP {status}")
+        return UrlCheck(url, status, 200 <= status < 400 or restricted, restricted,
+                        None if 200 <= status < 400 else f"HTTP {status}")
     except Exception as exc:
         return UrlCheck(url, None, False, False, f"{type(exc).__name__}: {exc}")
 
 
+def _record_sources(jobs):
+    return {str(getattr(j, "source_type", "") or "").lower() for j in jobs}
+
+
+def _provider_completion(jobs):
+    markers = []
+    totals = set()
+    returned = set()
+    for job in jobs:
+        raw = job.raw if isinstance(getattr(job, "raw", None), dict) else {}
+        if "_provider_complete" in raw:
+            markers.append(bool(raw.get("_provider_complete")))
+        if raw.get("_provider_total") is not None:
+            totals.add(str(raw.get("_provider_total")))
+        if raw.get("_provider_returned") is not None:
+            returned.add(str(raw.get("_provider_returned")))
+    return {
+        "has_marker": bool(markers),
+        "complete": bool(markers) and all(markers),
+        "totals": sorted(totals),
+        "returned": sorted(returned),
+    }
+
+
 def _coverage_confidence(company: dict[str, Any], jobs: list[Any], adapter_name: str) -> tuple[str, list[str]]:
     configured = str((company.get("source") or {}).get("type") or "")
-    record_sources = {str(getattr(j, "source_type", "") or "").lower() for j in jobs}
+    sources = _record_sources(jobs)
+    completion = _provider_completion(jobs)
     reasons: list[str] = []
 
     if configured == "manual":
         return "restricted", ["manual/approved feed required"]
 
-    if configured in TRUSTED_CONFIGURED_SOURCES and configured != "phenom":
-        reasons.append(f"configured structured/dedicated adapter: {configured}")
+    if completion["complete"]:
+        reasons.append(f"provider total/pagination reconciled: total={completion['totals']} returned={completion['returned']}")
         return "high", reasons
 
-    if record_sources and all(
-        any(source == trusted or source.startswith(trusted + "_") for trusted in TRUSTED_RECORD_SOURCES)
-        for source in record_sources
-    ):
-        reasons.append("all returned records came from structured/dedicated source types")
+    if sources and all(any(s == x or s.startswith(x + "_") for x in INTRINSICALLY_EXHAUSTIVE) for s in sources):
+        reasons.append("public board API is intrinsically exhaustive")
         return "high", reasons
 
-    if "Recovery" in adapter_name and record_sources:
-        reasons.append("recovery adapter returned records, but completeness is not independently proven")
+    if any(any(s == x or s.startswith(x + "_") for x in PROVIDER_TOTAL_SOURCES) for s in sources):
+        reasons.append("provider supports totals, but this run did not prove total == returned")
+        return "medium", reasons
+
+    if "Recovery" in adapter_name or "FixedProvider" in adapter_name:
+        reasons.append("wrapper returned data but coverage must be proven by the actual record source")
         return "medium", reasons
 
     if jobs_used_browser(jobs):
-        reasons.append("browser/XHR extraction used; result may be partial unless provider pagination is known")
+        reasons.append("browser/XHR extraction used without a reconciled provider total")
         return "unverified", reasons
 
-    reasons.append("generic HTML/auto extraction; no independent total-count source")
+    reasons.append("no independent provider total or exhaustive API contract")
     return "unverified", reasons
 
 
@@ -100,23 +120,19 @@ def audit_company(company: dict[str, Any], sample_urls: int = 5) -> dict[str, An
     started = time.perf_counter()
     configured = str((company.get("source") or {}).get("type") or "")
     if not company.get("enabled", True):
-        return {
-            "id": company.get("id"), "name": company.get("name"), "rank": company.get("rank"),
-            "enabled": False, "configured_source": configured, "verdict": "disabled",
-        }
+        return {"id": company.get("id"), "name": company.get("name"), "rank": company.get("rank"),
+                "enabled": False, "configured_source": configured, "verdict": "disabled"}
 
     adapter = None
     try:
         adapter = build_source(company)
-        raw_jobs = list(adapter.fetch(company) or [])
-        jobs = list(prefer_usable_jobs(raw_jobs) or [])
+        jobs = list(prefer_usable_jobs(list(adapter.fetch(company) or [])) or [])
     except Exception as exc:
         return {
             "id": company.get("id"), "name": company.get("name"), "rank": company.get("rank"),
             "enabled": True, "configured_source": configured,
             "adapter": type(adapter).__name__ if adapter else None,
-            "verdict": "failed", "jobs": 0,
-            "error": f"{type(exc).__name__}: {exc}",
+            "verdict": "failed", "jobs": 0, "error": f"{type(exc).__name__}: {exc}",
             "duration_seconds": round(time.perf_counter() - started, 3),
         }
 
@@ -126,68 +142,77 @@ def audit_company(company: dict[str, Any], sample_urls: int = 5) -> dict[str, An
     strong_urls = [j for j in jobs if strong_job_detail_url(getattr(j, "job_url", None))]
     locations = [j for j in jobs if str(getattr(j, "location", "") or "").strip()]
     descriptions = [j for j in jobs if str(getattr(j, "description", "") or "").strip()]
-    source_types = sorted({str(getattr(j, "source_type", "") or "") for j in jobs})
+    india_jobs = [j for j in jobs if is_india_job(getattr(j, "location", None), description=getattr(j, "description", None), raw=getattr(j, "raw", None))]
+    india_descriptions = [j for j in india_jobs if str(getattr(j, "description", "") or "").strip()]
+    source_types = sorted(_record_sources(jobs))
 
-    checks: list[UrlCheck] = []
-    for job in _sample_jobs(valid_urls, sample_urls):
-        checks.append(_check_url(str(job.job_url)))
+    checks = [_check_url(str(job.job_url)) for job in _sample_jobs(valid_urls, sample_urls)]
     broken_checks = [c for c in checks if not c.ok]
-
     confidence, coverage_reasons = _coverage_confidence(company, jobs, adapter_name)
+    completion = _provider_completion(jobs)
     allow_zero = bool((company.get("source") or {}).get("allow_zero_jobs"))
+
+    endpoints = sorted({
+        str((j.raw or {}).get("_source_response_url"))
+        for j in jobs if isinstance(getattr(j, "raw", None), dict) and (j.raw or {}).get("_source_response_url")
+    })[:50]
 
     reasons: list[str] = []
     if not jobs and not allow_zero:
         reasons.append("zero jobs returned")
     if invalid:
         reasons.append(f"{len(invalid)} implausible records survived normalization")
-    if jobs and len(valid_urls) / len(jobs) < 0.95:
+    if jobs and len(valid_urls) / len(jobs) < 0.98:
         reasons.append(f"only {len(valid_urls)}/{len(jobs)} records have valid URLs")
     if jobs and len(strong_urls) / len(jobs) < 0.80 and configured in {"auto", "phenom"}:
         reasons.append(f"only {len(strong_urls)}/{len(jobs)} URLs look like concrete vacancy details")
     if broken_checks:
         reasons.append(f"{len(broken_checks)}/{len(checks)} sampled detail URLs were unreachable")
+    india_detail_ratio = (len(india_descriptions) / len(india_jobs)) if india_jobs else 1.0
+    if india_jobs and india_detail_ratio < 0.80:
+        reasons.append(f"only {len(india_descriptions)}/{len(india_jobs)} India jobs contain a usable JD")
     if confidence == "unverified":
         reasons.append("completeness is not independently verified")
 
+    quality_bad = bool(
+        invalid or broken_checks
+        or (jobs and len(valid_urls) / len(jobs) < 0.98)
+        or (india_jobs and india_detail_ratio < 0.80)
+    )
     if not jobs and allow_zero:
         verdict = "verified_empty"
-    elif not jobs or invalid or (jobs and len(valid_urls) / len(jobs) < 0.95) or broken_checks:
+    elif not jobs or quality_bad:
         verdict = "failed_quality"
     elif confidence == "unverified":
         verdict = "needs_dedicated_adapter"
     elif confidence == "medium":
         verdict = "needs_completeness_review"
     else:
-        verdict = "verified"
+        verdict = "verified_complete"
 
     return {
         "id": company.get("id"), "name": company.get("name"), "rank": company.get("rank"),
         "enabled": True, "configured_source": configured, "adapter": adapter_name,
-        "verdict": verdict, "jobs": len(jobs), "browser_used": jobs_used_browser(jobs),
-        "source_types": source_types,
+        "verdict": verdict, "jobs": len(jobs), "india_jobs": len(india_jobs),
+        "browser_used": jobs_used_browser(jobs), "source_types": source_types,
+        "provider_completion": completion, "discovered_endpoints": endpoints,
         "quality": {
             "valid_url_ratio": round(len(valid_urls) / len(jobs), 4) if jobs else 0.0,
             "strong_detail_url_ratio": round(len(strong_urls) / len(jobs), 4) if jobs else 0.0,
             "location_ratio": round(len(locations) / len(jobs), 4) if jobs else 0.0,
             "description_ratio": round(len(descriptions) / len(jobs), 4) if jobs else 0.0,
+            "india_description_ratio": round(india_detail_ratio, 4),
             "implausible_records": len(invalid),
         },
-        "coverage_confidence": confidence,
-        "coverage_reasons": coverage_reasons,
+        "coverage_confidence": confidence, "coverage_reasons": coverage_reasons,
         "sample_url_checks": [asdict(c) for c in checks],
-        "sample_jobs": [
-            {
-                "external_id": getattr(j, "external_id", None),
-                "title": getattr(j, "title", None),
-                "location": getattr(j, "location", None),
-                "job_url": getattr(j, "job_url", None),
-                "source_type": getattr(j, "source_type", None),
-            }
-            for j in _sample_jobs(jobs, 8)
-        ],
-        "reasons": reasons,
-        "duration_seconds": round(time.perf_counter() - started, 3),
+        "sample_jobs": [{
+            "external_id": getattr(j, "external_id", None), "title": getattr(j, "title", None),
+            "location": getattr(j, "location", None), "job_url": getattr(j, "job_url", None),
+            "source_type": getattr(j, "source_type", None),
+            "has_description": bool(str(getattr(j, "description", "") or "").strip()),
+        } for j in _sample_jobs(jobs, 8)],
+        "reasons": reasons, "duration_seconds": round(time.perf_counter() - started, 3),
     }
 
 
@@ -206,14 +231,9 @@ def main() -> int:
         print(f"AUDIT {company.get('rank'):>3} {company.get('name')}", flush=True)
         row = audit_company(company, sample_urls=args.sample_urls)
         rows.append(row)
-        print(f"  -> {row.get('verdict')} jobs={row.get('jobs', '-')}", flush=True)
+        print(f"  -> {row.get('verdict')} jobs={row.get('jobs', '-')} india={row.get('india_jobs', '-')}", flush=True)
 
-    payload = {
-        "schema_version": 1,
-        "shard_index": args.shard_index,
-        "shard_count": args.shard_count,
-        "companies": rows,
-    }
+    payload = {"schema_version": 2, "shard_index": args.shard_index, "shard_count": args.shard_count, "companies": rows}
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
