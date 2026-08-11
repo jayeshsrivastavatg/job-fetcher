@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Reset Job Data · Job Fetcher{% endblock %}
+{% block heading %}Reset Job Data{% endblock %}
+{% block eyebrow %}Danger zone{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="panel-header">
+    <div>
+      <h2>Permanently clear all collected job data</h2>
+      <p>This is intended for a full clean re-fetch. It cannot be undone from the application.</p>
+    </div>
+  </div>
+  <div style="padding:0 18px 18px;">
+    {% if reset_error %}
+      <div style="background:var(--red-soft);color:var(--red);border:1px solid #f3d4d0;border-radius:8px;padding:11px 12px;margin-bottom:14px;"><strong>{{ reset_error }}</strong></div>
+    {% endif %}
+
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px;">
+      <div class="stat-card"><span class="stat-label">Jobs</span><strong>{{ "{:,}".format(reset_counts.jobs) }}</strong><small>raw active + inactive rows</small></div>
+      <div class="stat-card"><span class="stat-label">Analyses</span><strong>{{ "{:,}".format(reset_counts.relevance) }}</strong><small>relevance results</small></div>
+      <div class="stat-card"><span class="stat-label">Runs</span><strong>{{ "{:,}".format(reset_counts.runs) }}</strong><small>fetch + verify history</small></div>
+      <div class="stat-card"><span class="stat-label">Snapshots</span><strong>{{ "{:,}".format(reset_counts.snapshots) }}</strong><small>frozen job versions</small></div>
+      <div class="stat-card"><span class="stat-label">Artifacts</span><strong>{{ "{:,}".format(reset_counts.artifacts) }}</strong><small>AI/manifest files</small></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px;">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <strong style="display:block;margin-bottom:8px;">This will be deleted</strong>
+        <ul class="plain-list" style="color:var(--muted);">
+          <li>All collected jobs, including active and inactive jobs</li>
+          <li>All relevance scores, India classifications, and duplicate markers</li>
+          <li>All fetch/verification run history and frozen job snapshots</li>
+          <li>Generated AI input, manifest, daily scan, and run-history artifacts</li>
+        </ul>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <strong style="display:block;margin-bottom:8px;">This will be preserved</strong>
+        <ul class="plain-list" style="color:var(--muted);">
+          <li>Your configured company list and career-site source settings</li>
+          <li>Your candidate/relevance profile, including the India target</li>
+          <li>Your runtime settings and application code</li>
+          <li>Company configuration can be used immediately for a fresh Fetch All</li>
+        </ul>
+      </div>
+    </div>
+
+    {% if active_run %}
+      <div style="background:var(--amber-soft);color:var(--amber);border:1px solid #f2e3b4;border-radius:8px;padding:12px;margin-bottom:14px;">
+        <strong>Reset is disabled while a run is active.</strong>
+        <div style="margin-top:4px;">{{ active_run['run_type']|title }} run {{ active_run['id'] }} is still {{ active_run['status'] }}.</div>
+      </div>
+      <div class="button-row">
+        <a class="btn btn-secondary" href="/jobs">Back to Jobs</a>
+        <a class="btn btn-primary" href="/runs/{{ active_run['id'] }}">View active run</a>
+      </div>
+    {% else %}
+      <form method="post" action="/jobs/reset" class="stack-form" onsubmit="return confirm('FINAL CONFIRMATION: Permanently delete all collected job data and run history? This cannot be undone.');">
+        <label style="display:flex;flex-direction:column;gap:6px;max-width:520px;margin-bottom:14px;">
+          <span>To confirm, type <code>{{ reset_phrase }}</code> exactly:</span>
+          <input name="confirmation" autocomplete="off" spellcheck="false" required pattern="DELETE ALL JOBS" placeholder="{{ reset_phrase }}">
+        </label>
+        <div class="button-row">
+          <a class="btn btn-secondary" href="/jobs">Cancel</a>
+          <button class="btn btn-danger" type="submit">Permanently clear all job data</button>
+        </div>
+      </form>
+      <p class="muted" style="margin:12px 0 0;">There are two safeguards: the typed phrase above and a final browser confirmation after you press the delete button.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
