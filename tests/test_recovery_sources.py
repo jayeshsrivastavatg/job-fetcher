@@ -63,8 +63,9 @@ def test_official_html_parses_oracle_branded_job_link():
 def test_recovery_registry_covers_every_current_red_failure():
     from job_fetcher.sources.recovery import RECOVERY_PLANS
 
-    # Captured from the failing-company run on 2026-08-12. Zomato/Blinkit is
-    # intentionally excluded: Eternal currently exposes no public jobs feed.
+    # Captured from the failing-company run on 2026-08-12. Some of these companies
+    # now have a stronger dedicated/provider override, but keeping the recovery
+    # registry populated preserves the older fallback diagnostics and test fixtures.
     expected = {
         "atlassian",
         "microsoft",
@@ -84,10 +85,9 @@ def test_recovery_registry_covers_every_current_red_failure():
     assert expected <= set(RECOVERY_PLANS)
 
 
-def test_factory_routes_known_failure_through_adapter_compatible_recovery():
-    from job_fetcher.sources.eightfold import EightfoldSource
+def test_factory_routes_microsoft_through_dedicated_india_source():
     from job_fetcher.sources.factory import build_source
-    from job_fetcher.sources.recovery_adapters import RecoveryEightfoldSource
+    from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
 
     company = {
         "id": "microsoft",
@@ -95,9 +95,7 @@ def test_factory_routes_known_failure_through_adapter_compatible_recovery():
         "career_url": "https://apply.careers.microsoft.com/careers",
         "source": {"type": "eightfold", "entry_url": "https://apply.careers.microsoft.com/careers"},
     }
-    source = build_source(company)
-    assert isinstance(source, RecoveryEightfoldSource)
-    assert isinstance(source, EightfoldSource)
+    assert isinstance(build_source(company), MicrosoftIndiaSource)
 
 
 def test_factory_keeps_healthy_company_on_configured_adapter():
