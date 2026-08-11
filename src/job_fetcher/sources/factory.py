@@ -28,6 +28,7 @@ from job_fetcher.sources.fidelity_india import FidelityIndiaSource
 from job_fetcher.sources.shiprocket import ShiprocketSource
 from job_fetcher.sources.siemens_healthineers import SiemensHealthineersSource
 from job_fetcher.sources.dynatrace_india import DynatraceIndiaSource
+from job_fetcher.sources.urban_company import UrbanCompanySource
 from job_fetcher.sources.fixed_provider import FixedProviderSource
 
 SOURCES = {
@@ -63,6 +64,10 @@ _GREENHOUSE_OVERRIDES = {
     "hackerrank": "hackerrank",
     "twilio": "twilio",
 }
+_LEVER_OVERRIDES = {
+    "meesho": "meesho",
+    "zeta": "zeta",
+}
 _SMARTRECRUITERS_OVERRIDES = {
     "freshworks": "freshworks",
     "arista_networks": "AristaNetworks",
@@ -95,6 +100,7 @@ def build_source(company):
         "shiprocket": ShiprocketSource,
         "siemens_healthineers": SiemensHealthineersSource,
         "dynatrace": DynatraceIndiaSource,
+        "urban_company": UrbanCompanySource,
     }
     if company_id in dedicated:
         return dedicated[company_id]()
@@ -103,6 +109,11 @@ def build_source(company):
         return FixedProviderSource(
             GreenhouseSource(),
             {"type": "greenhouse", "board_token": _GREENHOUSE_OVERRIDES[company_id]},
+        )
+    if company_id in _LEVER_OVERRIDES:
+        return FixedProviderSource(
+            LeverSource(),
+            {"type": "lever", "site": _LEVER_OVERRIDES[company_id]},
         )
     if company_id in _SMARTRECRUITERS_OVERRIDES:
         return FixedProviderSource(
