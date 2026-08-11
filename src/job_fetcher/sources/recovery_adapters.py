@@ -4,6 +4,7 @@ from job_fetcher.sources.atlassian import AtlassianSource
 from job_fetcher.sources.auto import AutoSource
 from job_fetcher.sources.avature import AvatureSource
 from job_fetcher.sources.eightfold import EightfoldSource
+from job_fetcher.sources.oracle import OracleSource
 from job_fetcher.sources.recovery import RecoverySource
 
 
@@ -35,11 +36,19 @@ class RecoveryAvatureSource(AvatureSource):
         return RecoverySource(primary_source=AvatureSource()).fetch(company)
 
 
+class RecoveryOracleSource(OracleSource):
+    """OracleSource-compatible adapter with public-browser recovery first."""
+
+    def fetch(self, company):
+        return RecoverySource(primary_source=OracleSource()).fetch(company)
+
+
 RECOVERY_ADAPTERS = {
     "auto": RecoveryAutoSource,
     "eightfold": RecoveryEightfoldSource,
     "atlassian": RecoveryAtlassianSource,
     "avature": RecoveryAvatureSource,
+    "oracle": RecoveryOracleSource,
 }
 
 
