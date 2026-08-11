@@ -58,10 +58,13 @@ def build_raw_source(company):
 def build_source(company):
     """Return the configured adapter, enhanced with recovery where necessary.
 
-    Recovery wrappers subclass the configured adapter (AutoSource, EightfoldSource,
-    AtlassianSource or AvatureSource), so existing diagnostics/type expectations
-    remain valid while actual fetches get the hardened first-party fallback paths.
+    Recovery wrappers subclass the configured adapter, so existing diagnostics and
+    type expectations remain valid while actual fetches get hardened first-party
+    fallback paths.
     """
+    # Importing the second-pass registry mutates the shared recovery plan mapping
+    # before we decide whether this company needs a wrapper.
+    import job_fetcher.sources.recovery_extra  # noqa: F401
     from job_fetcher.sources.recovery import has_recovery_plan
 
     if has_recovery_plan(company):
