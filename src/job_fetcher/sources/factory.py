@@ -20,6 +20,7 @@ from job_fetcher.sources.atlassian import AtlassianSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
+from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
 
 SOURCES = {
     "auto": StrictAutoSource,
@@ -63,6 +64,15 @@ def build_source(company):
     fallback paths.
     """
     company_id = str(company.get("id") or "")
+
+    # Companies with a verified dedicated public index/provider should bypass the
+    # generic recovery layer entirely. This prevents a non-job browser fragment
+    # from outscoring the real dedicated parser merely because it returned more
+    # title+URL pairs.
+    if company_id == "microsoft":
+        return MicrosoftIndiaSource()
+    if company_id == "atlassian":
+        return AtlassianSource()
 
     # A few employers have moved to a cleaner public provider/API than the source
     # originally discovered for their branded career page. Keep these overrides
