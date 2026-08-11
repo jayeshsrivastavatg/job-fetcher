@@ -5,42 +5,42 @@ from job_fetcher.sources.auto import AutoSource
 from job_fetcher.sources.avature import AvatureSource
 from job_fetcher.sources.eightfold import EightfoldSource
 from job_fetcher.sources.oracle import OracleSource
-from job_fetcher.sources.recovery import RecoverySource
+from job_fetcher.sources.recovery_best import BestRecoverySource
 
 
 class RecoveryAutoSource(AutoSource):
     """AutoSource-compatible adapter with first-party recovery before AutoSource."""
 
     def fetch(self, company):
-        return RecoverySource(primary_source=AutoSource()).fetch(company)
+        return BestRecoverySource(primary_source=AutoSource()).fetch(company)
 
 
 class RecoveryEightfoldSource(EightfoldSource):
     """EightfoldSource-compatible adapter with first-party recovery first."""
 
     def fetch(self, company):
-        return RecoverySource(primary_source=EightfoldSource()).fetch(company)
+        return BestRecoverySource(primary_source=EightfoldSource()).fetch(company)
 
 
 class RecoveryAtlassianSource(AtlassianSource):
     """AtlassianSource-compatible adapter with the hardened browser recovery."""
 
     def fetch(self, company):
-        return RecoverySource(primary_source=AtlassianSource()).fetch(company)
+        return BestRecoverySource(primary_source=AtlassianSource()).fetch(company)
 
 
 class RecoveryAvatureSource(AvatureSource):
     """AvatureSource-compatible adapter with IBM's first-party search recovery."""
 
     def fetch(self, company):
-        return RecoverySource(primary_source=AvatureSource()).fetch(company)
+        return BestRecoverySource(primary_source=AvatureSource()).fetch(company)
 
 
 class RecoveryOracleSource(OracleSource):
     """OracleSource-compatible adapter with public-browser recovery first."""
 
     def fetch(self, company):
-        return RecoverySource(primary_source=OracleSource()).fetch(company)
+        return BestRecoverySource(primary_source=OracleSource()).fetch(company)
 
 
 RECOVERY_ADAPTERS = {
