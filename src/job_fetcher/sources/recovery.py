@@ -9,10 +9,9 @@ from job_fetcher.sources.official_html import OfficialHtmlSource
 from job_fetcher.sources.recovery_browser import RecoveryBrowserSource
 
 
-# These are first-party recovery surfaces for companies that are known to have a
-# brittle/blocked primary adapter. They are deliberately kept in code rather than
-# silently changing the user's companies.yaml: the configured source remains the
-# final fallback, while the recovery path can be regression-tested centrally.
+# First-party recovery surfaces for the red/failing companies reported by the UI.
+# The configured source remains the final fallback and the public source factory
+# continues to return the configured adapter type for diagnostics/tests.
 RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
     "microsoft": [
         {
@@ -50,7 +49,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "kind": "official_html",
             "entry_url": "https://morganstanley.eightfold.ai/careers?domain=morganstanley.com&hl=en",
             "max_pages": 40,
-            "job_href_patterns": [r"/careers/job(?:/|\?).*"],
+            "job_href_patterns": [r"/careers/job/\d+"],
         },
         {
             "kind": "recovery_browser",
@@ -67,6 +66,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "default_location": "India",
             "require_india": True,
             "max_pages": 50,
+            "job_href_patterns": [r"jobs\.citi\.com/job/"],
         },
         {
             "kind": "recovery_browser",
@@ -97,6 +97,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "entry_url": "https://careers.mastercard.com/us/en/software-engineering-jobs",
             "require_india": True,
             "max_pages": 50,
+            "job_href_patterns": [r"careers\.mastercard\.com/.*/job/", r"/job/[^/?#]+"],
         },
         {
             "kind": "recovery_browser",
@@ -129,6 +130,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "kind": "official_html",
             "entry_url": "https://www.gojek.io/careers/all",
             "max_pages": 20,
+            "job_href_patterns": [r"gojek\.io/careers/.*job", r"/careers/job/"],
         },
         {
             "kind": "recovery_browser",
@@ -143,6 +145,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "kind": "official_html",
             "entry_url": "https://careers.confluent.io/open-positions/",
             "max_pages": 30,
+            "job_href_patterns": [r"careers\.confluent\.io/job/", r"/open-positions/[^/?#]+"],
         },
         {
             "kind": "recovery_browser",
@@ -174,6 +177,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "default_location": "India",
             "require_india": True,
             "max_pages": 30,
+            "job_href_patterns": [r"openings\.co/rakuten/.*job"],
         },
         {
             "kind": "recovery_browser",
@@ -189,6 +193,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "default_location": "India",
             "require_india": True,
             "max_pages": 20,
+            "job_href_patterns": [r"sonyindiasoftware.*(?:job|opening|position)"],
         },
         {
             "kind": "recovery_browser",
@@ -204,6 +209,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "default_location": "India",
             "require_india": True,
             "max_pages": 30,
+            "job_href_patterns": [r"careers\.ibm\.com/careers/JobDetail/", r"ibm\.com/.*/careers/.*job"],
         },
         {
             "kind": "recovery_browser",
@@ -219,18 +225,31 @@ def has_recovery_plan(company: dict[str, Any]) -> bool:
     return str(company.get("id") or "") in RECOVERY_PLANS
 
 
-class RecoverySource(JobSource):
-    """Try verified first-party recovery surfaces, then the configured source.
+def fetch_with_recovery(company: dict[str, Any], primary_source: JobSource | None = None):
+    """Fetch using a recovery plan when one exists, otherwise the configured adapter.
 
-    A broken recovery attempt never changes the local database. The service only
-    persists the returned final job list after this method succeeds.
+    This function belongs at the orchestration boundary. `build_source()` therefore
+    keeps returning the configured adapter type while actual fetches can recover from
+    a brittle listing, misleading secondary ATS, timeout, or false challenge.
     """
+    if has_recovery_plan(company):
+        return RecoverySource(primary_source=primary_source).fetch(company)
+    if primary_source is None:
+        from job_fetcher.sources.factory import build_raw_source
+        primary_source = build_raw_source(company)
+    return primary_source.fetch(company)
+
+
+class RecoverySource(JobSource):
+    """Try verified first-party recovery surfaces, then the configured source."""
+
+    def __init__(self, primary_source: JobSource | None = None):
+        self.primary_source = primary_source
 
     def fetch(self, company):
         company_id = str(company.get("id") or "")
         attempts = RECOVERY_PLANS.get(company_id) or []
         errors: list[str] = []
-        best = []
 
         for index, attempt in enumerate(attempts, 1):
             candidate = deepcopy(company)
@@ -244,27 +263,23 @@ class RecoverySource(JobSource):
             except Exception as exc:
                 errors.append(f"recovery[{index}] {kind}: {type(exc).__name__}: {exc}")
                 continue
-            if len(jobs) > len(best):
-                best = jobs
-            # A healthy first-party listing is enough; don't pay for a browser
-            # attempt after static HTML already produced meaningful records.
-            if kind == "official_html" and jobs:
-                return dedupe(jobs)
             if jobs:
                 return dedupe(jobs)
+            errors.append(f"recovery[{index}] {kind}: returned zero jobs")
 
-        # Preserve the user's configured source as the last resort. Import lazily
-        # to avoid a circular dependency with factory.build_source().
+        # Final fallback is exactly the adapter configured in companies.yaml.
         try:
-            from job_fetcher.sources.factory import build_raw_source
-            jobs = list(build_raw_source(company).fetch(company) or [])
+            primary = self.primary_source
+            if primary is None:
+                from job_fetcher.sources.factory import build_raw_source
+                primary = build_raw_source(company)
+            jobs = list(primary.fetch(company) or [])
             if jobs:
                 return dedupe(jobs)
+            errors.append("configured_source: returned zero jobs")
         except Exception as exc:
             errors.append(f"configured_source: {type(exc).__name__}: {exc}")
 
-        if best:
-            return dedupe(best)
         raise RuntimeError(
             f"recovery_exhausted[{company_id}]: " + ("; ".join(errors) or "all sources returned zero jobs")
         )
