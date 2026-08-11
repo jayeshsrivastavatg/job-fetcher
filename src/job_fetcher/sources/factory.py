@@ -62,6 +62,26 @@ def build_source(company):
     type expectations remain valid while actual fetches get hardened first-party
     fallback paths.
     """
+    company_id = str(company.get("id") or "")
+
+    # A few employers have moved to a cleaner public provider/API than the source
+    # originally discovered for their branded career page. Keep these overrides
+    # isolated so they are easy to remove if the employer changes providers again.
+    if company_id in {"amazon", "uber", "snowflake", "confluent"}:
+        from job_fetcher.sources.current_provider_overrides import (
+            AmazonJsonSource,
+            ConfluentAshbySource,
+            SnowflakeAshbySource,
+            UberIndiaSource,
+        )
+        current = {
+            "amazon": AmazonJsonSource,
+            "uber": UberIndiaSource,
+            "snowflake": SnowflakeAshbySource,
+            "confluent": ConfluentAshbySource,
+        }
+        return current[company_id]()
+
     # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
     # Check that signal before generic extraction can mistake navigation links for
     # vacancies (Zerodha is the current example).

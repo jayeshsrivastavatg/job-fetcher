@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -82,7 +83,15 @@ def _sample_detail(jobs, timeout: float) -> tuple[str | None, bool | None, int |
         r.close()
         return url, ok, code, None if ok else f"HTTP {code}"
     except Exception as exc:
-        return url, False, None, f"{type(exc).__name__}: {exc}"
+        text = f"{type(exc).__name__}: {exc}"
+        # urllib3/requests retry exhaustion often hides the final HTTP status in
+        # the exception text instead of exposing a Response. Preserve 401/403/429
+        # so health classification can distinguish an access block from a dead URL.
+        wrapped_code = None
+        match = re.search(r"\b(401|403|429)\b", text)
+        if match:
+            wrapped_code = int(match.group(1))
+        return url, False, wrapped_code, text
 
 
 def _previous_counts(path: Path) -> dict[str, int]:
