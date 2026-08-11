@@ -254,9 +254,19 @@ class RunHistoryStore:
         profile = load_profile()
         generated_at = utcnow()
         with _connect() as conn:
+            # Alias every analysis field explicitly. `s.*` contains columns with the
+            # same names, initially NULL; without aliases sqlite3.Row would resolve
+            # lookups to those NULL snapshot columns instead of the joined analysis.
             snapshots = conn.execute(
-                '''SELECT s.*,a.normalized_location,a.role_family,a.role_label,a.min_experience,
-                          a.max_experience,a.relevance_score,a.relevance_status,a.is_relevant
+                '''SELECT s.*,
+                          a.normalized_location AS analysis_normalized_location,
+                          a.role_family AS analysis_role_family,
+                          a.role_label AS analysis_role_label,
+                          a.min_experience AS analysis_min_experience,
+                          a.max_experience AS analysis_max_experience,
+                          a.relevance_score AS analysis_relevance_score,
+                          a.relevance_status AS analysis_relevance_status,
+                          a.is_relevant AS analysis_is_relevant
                    FROM run_job_snapshots s
                    LEFT JOIN job_relevance_analysis a
                      ON a.company_id=s.company_id AND a.external_id=s.external_id
@@ -269,10 +279,11 @@ class RunHistoryStore:
                        min_experience=?,max_experience=?,relevance_score=?,relevance_status=?,is_relevant=?
                        WHERE run_id=? AND company_id=? AND external_id=?''',
                     (
-                        row["normalized_location"], row["role_family"], row["role_label"],
-                        row["min_experience"], row["max_experience"], row["relevance_score"],
-                        row["relevance_status"], row["is_relevant"], run_id,
-                        row["company_id"], row["external_id"],
+                        row["analysis_normalized_location"], row["analysis_role_family"],
+                        row["analysis_role_label"], row["analysis_min_experience"],
+                        row["analysis_max_experience"], row["analysis_relevance_score"],
+                        row["analysis_relevance_status"], row["analysis_is_relevant"],
+                        run_id, row["company_id"], row["external_id"],
                     ),
                 )
 
@@ -435,17 +446,21 @@ class RunHistoryStore:
             clauses.append("(s.title LIKE ? OR s.company_name LIKE ? OR s.location LIKE ?)")
             args.extend([like, like, like])
         if company_id:
-            clauses.append("s.company_id=?"); args.append(company_id)
+            clauses.append("s.company_id=?")
+            args.append(company_id)
         if event_type:
-            clauses.append("s.event_type=?"); args.append(event_type)
+            clauses.append("s.event_type=?")
+            args.append(event_type)
         if relevant == "yes":
             clauses.append("s.is_relevant=1")
         elif relevant == "no":
             clauses.append("COALESCE(s.is_relevant,0)=0")
         if min_score is not None:
-            clauses.append("COALESCE(s.relevance_score,0)>=?"); args.append(float(min_score))
+            clauses.append("COALESCE(s.relevance_score,0)>=?")
+            args.append(float(min_score))
         where = " WHERE " + " AND ".join(clauses)
-        page = max(1, int(page)); page_size = max(1, min(200, int(page_size)))
+        page = max(1, int(page))
+        page_size = max(1, min(200, int(page_size)))
         offset = (page - 1) * page_size
         with _connect() as conn:
             total = int(conn.execute(f"SELECT COUNT(*) FROM run_job_snapshots s{where}", args).fetchone()[0])
