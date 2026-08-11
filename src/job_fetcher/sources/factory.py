@@ -62,6 +62,14 @@ def build_source(company):
     type expectations remain valid while actual fetches get hardened first-party
     fallback paths.
     """
+    # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
+    # Check that signal before generic extraction can mistake navigation links for
+    # vacancies (Zerodha is the current example).
+    source = company.get("source") or {}
+    if source.get("type") == "auto" and source.get("allow_zero_jobs"):
+        from job_fetcher.sources.zero_aware_auto import ZeroAwareAutoSource
+        return ZeroAwareAutoSource()
+
     # Importing the second-pass registry mutates the shared recovery plan mapping
     # before we decide whether this company needs a wrapper.
     import job_fetcher.sources.recovery_extra  # noqa: F401
