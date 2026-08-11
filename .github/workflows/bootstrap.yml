@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   bootstrap:
-    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'chore: stage verified baseline'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
