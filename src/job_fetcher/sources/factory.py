@@ -24,6 +24,8 @@ from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
 from job_fetcher.sources.nutanix import NutanixSource
 from job_fetcher.sources.intuit import IntuitIndiaSource
 from job_fetcher.sources.media_net import MediaNetSource
+from job_fetcher.sources.fidelity_india import FidelityIndiaSource
+from job_fetcher.sources.shiprocket import ShiprocketSource
 from job_fetcher.sources.fixed_provider import FixedProviderSource
 
 SOURCES = {
@@ -87,6 +89,8 @@ def build_source(company):
         "nutanix": NutanixSource,
         "intuit": IntuitIndiaSource,
         "media_net": MediaNetSource,
+        "fidelity": FidelityIndiaSource,
+        "shiprocket": ShiprocketSource,
     }
     if company_id in dedicated:
         return dedicated[company_id]()
