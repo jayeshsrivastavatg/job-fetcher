@@ -5,6 +5,7 @@ from copy import deepcopy
 from job_fetcher.job_quality import prefer_usable_jobs, valid_http_url
 from job_fetcher.sources.generic_extract import dedupe
 from job_fetcher.sources.recovery import RECOVERY_PLANS, RecoverySource
+from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
 
 
 def _result_score(jobs):
@@ -26,12 +27,12 @@ class BestRecoverySource(RecoverySource):
     Server-rendered landing pages frequently expose only featured roles, while the
     public browser/XHR application exposes the complete job set. We therefore do
     not accept the first nonzero HTML result. Structured provider feeds such as
-    Greenhouse/SuccessFactors are terminal because they already expose complete
-    paginated job records. Other recoveries are compared with the configured
-    adapter and the result with the most usable title+URL records wins.
+    Greenhouse/SuccessFactors/SmartRecruiters are terminal because they already
+    expose complete paginated job records. Other recoveries are compared with the
+    configured adapter and the result with the most usable title+URL records wins.
     """
 
-    TRUSTED_STRUCTURED = {"greenhouse", "successfactors"}
+    TRUSTED_STRUCTURED = {"greenhouse", "successfactors", "smartrecruiters"}
 
     def fetch(self, company):
         company_id = str(company.get("id") or "")
@@ -82,3 +83,9 @@ class BestRecoverySource(RecoverySource):
         raise RuntimeError(
             f"recovery_exhausted[{company_id}]: " + ("; ".join(errors) or "all sources returned zero jobs")
         )
+
+    @staticmethod
+    def _adapter(kind: str | None):
+        if kind == "smartrecruiters":
+            return SmartRecruitersSource()
+        return RecoverySource._adapter(kind)
