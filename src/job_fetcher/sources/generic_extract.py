@@ -9,7 +9,7 @@ GENERIC_LABELS = {
     "see jobs", "search jobs", "explore jobs", "apply", "apply now", "learn more",
 }
 JOB_URL_RE = re.compile(r"/(job|jobs|jobdetail|career|careers|position|positions|opening|openings|requisition|vacanc(?:y|ies))([/?#]|$)", re.I)
-TITLE_HINT_RE = re.compile(r"(engineer|developer|manager|analyst|architect|scientist|designer|consultant|specialist|director|lead|intern|associate|product|sales|marketing|finance|legal|recruiter|operations|support|security|qa|sdet|devops|data|software)", re.I)
+TITLE_HINT_RE = re.compile(r"(engineer|engineering|developer|manager|analyst|architect|scientist|designer|consultant|specialist|director|lead|intern|associate|member|technical|product|sales|marketing|finance|legal|recruiter|operations|support|security|qa|sdet|devops|data|software)", re.I)
 
 
 def clean_text(value):
@@ -168,23 +168,71 @@ def infer_location(parent_text, title):
     return None
 
 
+def _canonical_json_job_url(base_url, eid):
+    if not eid:
+        return None
+    parsed = urlparse(base_url)
+    host = parsed.netloc.lower()
+    origin = f"{parsed.scheme or 'https'}://{parsed.netloc}"
+    value = str(eid)
+
+    # Oracle public Candidate Experience pages often return Title/Id/location in
+    # XHR JSON but omit a URL from each requisition row.
+    if host == "careers.oracle.com":
+        m = re.search(r"/(?P<locale>[^/]+)/sites/(?P<site>[^/]+)(?:/|$)", parsed.path, re.I)
+        locale = m.group("locale") if m else "en"
+        site = m.group("site") if m else "jobsearch"
+        return f"{origin}/{locale}/sites/{site}/job/{value}"
+
+    if "oraclecloud.com" in host:
+        m = re.search(
+            r"/hcmUI/CandidateExperience/(?P<locale>[^/]+)/sites/(?P<site>[^/]+)(?:/|$)",
+            parsed.path,
+            re.I,
+        )
+        if m:
+            return f"{origin}/hcmUI/CandidateExperience/{m.group('locale')}/sites/{m.group('site')}/job/{value}"
+
+    if host.endswith(".eightfold.ai"):
+        return f"{origin}/careers/job/{value}"
+
+    # Swiggy's current SPA uses a requisition id in the URL fragment rather than
+    # ordinary <a href> detail links.
+    if host == "careers.swiggy.com":
+        return f"{origin}/#/careers?reqid={value}"
+    return None
+
+
 def extract_jobs_from_json(company, payload, base_url, source_type="browser_json"):
     records = []
     for obj in walk_objects(payload):
-        title = first(obj, "title", "jobTitle", "job_title", "name", "positionTitle")
+        title = first(obj, "title", "Title", "jobTitle", "job_title", "name", "positionTitle")
         if not isinstance(title, str) or not TITLE_HINT_RE.search(title):
             continue
         # Require at least one extra job-ish field to reduce false positives.
-        if not any(k in obj for k in ("location", "locations", "jobUrl", "job_url", "url", "id", "jobId", "requisitionId", "externalPath", "description")):
+        if not any(k in obj for k in (
+            "location", "locations", "PrimaryLocation", "locationCountry", "jobUrl", "job_url", "url",
+            "id", "Id", "jobId", "requisitionId", "positionId", "reqId", "externalPath",
+            "description", "ShortDescriptionStr",
+        )):
             continue
-        raw_url = first(obj, "jobUrl", "job_url", "url", "absolute_url", "hostedUrl", "externalPath")
-        job_url = urljoin(base_url, str(raw_url)) if raw_url else None
-        loc = first(obj, "location", "locations", "locationName", "locationsText", "city")
-        desc = first(obj, "description", "descriptionPlain", "jobDescription", "content")
+        raw_url = first(obj, "jobUrl", "job_url", "url", "absolute_url", "hostedUrl", "externalPath", "JobUrl")
+        eid = first(
+            obj, "id", "Id", "_id", "jobId", "jobID", "job_id", "requisitionId", "externalId", "ref",
+            "positionId", "positionDisplayId", "atsJobId", "reqId",
+        )
+        job_url = urljoin(base_url, str(raw_url)) if raw_url else _canonical_json_job_url(base_url, eid)
+        loc = first(
+            obj, "location", "locations", "locationName", "locationsText", "city", "PrimaryLocation",
+            "locationCountry",
+        )
+        desc = first(
+            obj, "description", "descriptionPlain", "jobDescription", "content", "ShortDescriptionStr",
+            "ExternalResponsibilitiesStr",
+        )
         if isinstance(desc, str) and "<" in desc:
             desc = BeautifulSoup(desc, "html.parser").get_text(" ", strip=True)
-        eid = first(obj, "id", "_id", "jobId", "jobID", "job_id", "requisitionId", "externalId", "ref")
-        posted = first(obj, "postedAt", "posted_at", "datePosted", "publishedAt", "postedOn")
+        posted = first(obj, "postedAt", "posted_at", "datePosted", "publishedAt", "postedOn", "PostedDate")
         records.append(Job(company["id"], company["name"], source_type,
                            clean_text(eid) or job_url, clean_text(title) or "",
                            location_text(loc), clean_text(desc), job_url, clean_text(posted), obj))
