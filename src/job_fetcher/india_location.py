@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 
-LOCATION_RULESET_VERSION = "india-location-2026-08-12-v1"
+LOCATION_RULESET_VERSION = "india-location-2026-08-12-v2"
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,7 @@ _CITY_ALIASES: dict[str, tuple[str, ...]] = {
     "Coimbatore": ("coimbatore",),
     "Cuttack": ("cuttack",),
     "Dehradun": ("dehradun",),
-    "Delhi": ("new delhi", "delhi"),
+    "Delhi": ("new delhi", "delhi ncr", "delhi"),
     "Dhanbad": ("dhanbad",),
     "Dharamshala": ("dharamshala", "dharmshala"),
     "Durgapur": ("durgapur",),
@@ -222,19 +222,26 @@ _STRUCTURED_STATE_CODES: dict[str, str] = {
 }
 
 
+# Explicit foreign-country evidence outranks a bare city/state alias. This matters
+# for place names shared across borders, such as Hyderabad/Punjab in Pakistan or
+# Salem in the US. India still wins for a true multi-location listing that explicitly
+# contains India (e.g. "Bengaluru, India / London, UK").
 _FOREIGN_COUNTRY_ALIASES = (
     "united states", "united states of america", "usa", "canada", "united kingdom", "great britain",
     "england", "scotland", "wales", "singapore", "australia", "new zealand", "germany", "france",
     "ireland", "netherlands", "spain", "italy", "portugal", "sweden", "norway", "denmark", "finland",
     "switzerland", "austria", "belgium", "poland", "romania", "czech republic", "czechia", "hungary",
     "ukraine", "israel", "united arab emirates", "uae", "saudi arabia", "qatar", "bahrain", "oman",
+    "pakistan", "bangladesh", "nepal", "sri lanka", "bhutan", "maldives", "afghanistan",
     "japan", "south korea", "korea", "china", "hong kong", "taiwan", "malaysia", "indonesia",
     "philippines", "thailand", "vietnam", "brazil", "mexico", "argentina", "chile", "colombia",
     "south africa", "kenya", "nigeria", "egypt",
 )
 
 
-_LOCATION_KEY_HINTS = ("location", "country", "city", "state", "province", "office", "address", "workplace", "place")
+_LOCATION_KEY_HINTS = (
+    "location", "country", "city", "state", "province", "region", "office", "address", "workplace", "place",
+)
 _COUNTRY_KEY_HINTS = ("country", "countrycode", "country_code", "countryid", "country_id")
 _STATE_KEY_HINTS = ("state", "province", "region")
 
@@ -259,29 +266,34 @@ def _office_code_match(raw: str | None) -> str | None:
     return None
 
 
+def _has_explicit_india_country(raw: str | None) -> bool:
+    text = _norm(raw)
+    if not text:
+        return False
+    if any(_contains_phrase(text, token) for token in ("india", "republic of india", "bharat")):
+        return True
+    stripped = (raw or "").strip()
+    if stripped.upper() in {"IN", "IND"}:
+        return True
+    return re.fullmatch(
+        r"(?i)(?:remote\s*[-,/|:]\s*(?:IN|IND)|(?:IN|IND)\s*[-,/|:]\s*remote)", stripped,
+    ) is not None
+
+
 def _india_text_match(raw: str | None) -> tuple[str | None, str | None]:
     text = _norm(raw)
     if not text:
         return None, None
-    if _contains_phrase(text, "india") or _contains_phrase(text, "republic of india") or _contains_phrase(text, "bharat"):
+    if _has_explicit_india_country(raw):
         if "remote" in text:
-            return "Remote", "country_name"
+            return "Remote", "country_name_or_code"
         city = _canonical_alias_match(text, _CITY_ALIASES)
         if city:
-            return city, "country_name+city"
+            return city, "country+city"
         region = _canonical_alias_match(text, _REGION_ALIASES)
         if region:
-            return region, "country_name+region"
-        return "India", "country_name"
-
-    # Treat IN/IND as a country code only when the whole field is the code or the
-    # code is explicitly coupled to remote. This avoids misclassifying "Austin, IN"
-    # (Indiana) as India.
-    stripped = (raw or "").strip()
-    if stripped.upper() in {"IN", "IND"}:
-        return "India", "country_code"
-    if re.fullmatch(r"(?i)(?:remote\s*[-,/|:]\s*(?:IN|IND)|(?:IN|IND)\s*[-,/|:]\s*remote)", stripped):
-        return "Remote", "country_code+remote"
+            return region, "country+region"
+        return "India", "country_name_or_code"
 
     city = _canonical_alias_match(text, _CITY_ALIASES)
     if city:
@@ -302,8 +314,9 @@ def _explicit_foreign_text(raw: str | None) -> str | None:
     text = _norm(raw)
     if not text:
         return None
-    # India wins for multi-location roles (e.g. "Bengaluru, India / London, UK").
-    if _india_text_match(raw)[0]:
+    # Explicit India country evidence means this is a legitimate India-capable
+    # multi-location role even if another country is also listed.
+    if _has_explicit_india_country(raw):
         return None
     for country in _FOREIGN_COUNTRY_ALIASES:
         if _contains_phrase(text, country):
@@ -341,36 +354,53 @@ def _location_like_values(raw: Any, *, max_depth: int = 5) -> list[tuple[str, st
     return out
 
 
-def _structured_india(raw: Any) -> tuple[str | None, str | None]:
-    for path, value in _location_like_values(raw):
-        path_n = _norm(path).replace(" ", "")
-        upper = value.strip().upper()
-        if any(h.replace("_", "") in path_n for h in _COUNTRY_KEY_HINTS):
-            if upper in {"IN", "IND", "INDIA"} or _contains_phrase(_norm(value), "india"):
-                return "India", f"{path}=india"
-            continue
-        if any(h in path_n for h in _STATE_KEY_HINTS) and upper in _STRUCTURED_STATE_CODES:
-            return _STRUCTURED_STATE_CODES[upper], f"{path}=state_code:{upper}"
-        canonical, reason = _india_text_match(value)
-        if canonical:
-            return canonical, f"{path}:{reason}"
-    return None, None
-
-
-def _structured_foreign(raw: Any) -> str | None:
+def _structured_country_status(raw: Any) -> tuple[str | None, str | None]:
+    """Return explicit structured country status before considering city aliases."""
+    india_evidence: str | None = None
+    foreign_evidence: str | None = None
     for path, value in _location_like_values(raw):
         path_n = _norm(path).replace(" ", "")
         if not any(h.replace("_", "") in path_n for h in _COUNTRY_KEY_HINTS):
             continue
         upper = value.strip().upper()
-        if upper in {"IN", "IND", "INDIA"}:
-            return None
-        if re.fullmatch(r"[A-Z]{2,3}", upper):
-            return f"{path}={upper}"
+        text = _norm(value)
+        if upper in {"IN", "IND", "INDIA"} or _contains_phrase(text, "india") or _contains_phrase(text, "bharat"):
+            india_evidence = f"{path}=india"
+            continue
         foreign = _explicit_foreign_text(value)
         if foreign:
-            return f"{path}={foreign}"
-    return None
+            foreign_evidence = f"{path}={foreign}"
+            continue
+        # In an explicitly country-labelled field, a non-India ISO-like code is
+        # enough to rule out India even if the code is not in our country-name list.
+        if re.fullmatch(r"[A-Z]{2,3}", upper):
+            foreign_evidence = f"{path}=country_code:{upper}"
+
+    # If an ATS genuinely lists several allowed countries and one is India, keep it:
+    # the job is available to an India-based candidate. Otherwise foreign wins.
+    if india_evidence:
+        return "india", india_evidence
+    if foreign_evidence:
+        return "foreign", foreign_evidence
+    return None, None
+
+
+def _structured_india_non_country(raw: Any) -> tuple[str | None, str | None]:
+    for path, value in _location_like_values(raw):
+        path_n = _norm(path).replace(" ", "")
+        if any(h.replace("_", "") in path_n for h in _COUNTRY_KEY_HINTS):
+            continue
+        upper = value.strip().upper()
+        if any(h in path_n for h in _STATE_KEY_HINTS) and upper in _STRUCTURED_STATE_CODES:
+            return _STRUCTURED_STATE_CODES[upper], f"{path}=state_code:{upper}"
+        # If this structured value itself says another country, do not harvest an
+        # overlapping India city/state token from it.
+        if _explicit_foreign_text(value):
+            continue
+        canonical, reason = _india_text_match(value)
+        if canonical:
+            return canonical, f"{path}:{reason}"
+    return None, None
 
 
 def _description_location_match(description: str | None) -> tuple[str | None, str | None]:
@@ -380,6 +410,8 @@ def _description_location_match(description: str | None) -> tuple[str | None, st
     for line in lines[:120]:
         if re.search(r"(?i)\b(?:job\s+|work\s+|workplace\s+|office\s+|primary\s+)?location\s*[:\-]", line):
             value = re.split(r"[:\-]", line, maxsplit=1)[-1].strip()
+            if _explicit_foreign_text(value):
+                continue
             canonical, reason = _india_text_match(value)
             if canonical:
                 return canonical, f"description_location:{reason}"
@@ -417,29 +449,51 @@ def classify_india_location(
 ) -> LocationClassification:
     """Classify whether a job is genuinely available in India.
 
+    Precedence is deliberate:
+      1. explicit structured ATS country fields,
+      2. explicit country names/codes in the displayed location,
+      3. explicit foreign country names,
+      4. Indian city/state/locality/office-code aliases,
+      5. structured non-country location fields,
+      6. strong JD location language,
+      7. unknown.
+
     Only positive India evidence returns status='india'. Unknown/ambiguous locations
-    are intentionally not treated as India; this prevents foreign jobs from leaking
-    into user-facing results while structured ATS fields and broad aliases maximize
-    recall for Indian roles.
+    are not treated as India, preventing foreign jobs from leaking into candidate
+    results while structured ATS fields and broad aliases maximize India recall.
     """
-    structured, evidence = _structured_india(raw)
-    if structured:
-        # Prefer a more specific city from the displayed location when available.
+    country_status, country_evidence = _structured_country_status(raw)
+    if country_status == "foreign":
+        return LocationClassification(
+            "foreign", None, (location or "Unknown").strip() or "Unknown", country_evidence or "structured_foreign_country",
+        )
+    if country_status == "india":
+        primary, _ = _india_text_match(location)
+        canonical = primary or "India"
+        return LocationClassification(
+            "india", "IN", _normalized(canonical, location), country_evidence or "structured_india_country",
+        )
+
+    # An explicit India country marker in the displayed location is the strongest
+    # unstructured signal and also supports true multi-country job listings.
+    if _has_explicit_india_country(location):
         primary, primary_reason = _india_text_match(location)
-        canonical = primary or structured
-        return LocationClassification("india", "IN", _normalized(canonical, location), evidence or primary_reason or "structured")
+        canonical = primary or "India"
+        return LocationClassification("india", "IN", _normalized(canonical, location), f"location:{primary_reason or 'country'}")
+
+    # Explicit foreign country evidence outranks bare city/state aliases. Without
+    # this precedence, "Hyderabad, Pakistan" could be mistaken for Hyderabad, India.
+    foreign = _explicit_foreign_text(location)
+    if foreign:
+        return LocationClassification("foreign", None, (location or "Unknown").strip() or "Unknown", f"location:{foreign}")
 
     primary, primary_reason = _india_text_match(location)
     if primary:
         return LocationClassification("india", "IN", _normalized(primary, location), f"location:{primary_reason}")
 
-    structured_foreign = _structured_foreign(raw)
-    if structured_foreign:
-        return LocationClassification("foreign", None, (location or "Unknown").strip() or "Unknown", structured_foreign)
-
-    foreign = _explicit_foreign_text(location)
-    if foreign:
-        return LocationClassification("foreign", None, (location or "Unknown").strip() or "Unknown", f"location:{foreign}")
+    structured, evidence = _structured_india_non_country(raw)
+    if structured:
+        return LocationClassification("india", "IN", _normalized(structured, location), evidence or "structured_location")
 
     desc, desc_reason = _description_location_match(description)
     if desc:
