@@ -79,7 +79,9 @@ def test_priority_company_config_routes_and_flipkart_is_safe_disabled():
     assert by['flipkart']['source']['type']=='manual' and by['flipkart']['enabled'] is False
     assert build_source(by['meta']).__class__.__name__=='MetaSource'
     assert build_source(by['apple']).__class__.__name__=='AppleSource'
-    assert build_source(by['amazon']).__class__.__name__=='AmazonSource'
+    # Amazon's hardened source remains an AmazonSource subclass even when it
+    # prefers the structured public search JSON endpoint.
+    assert isinstance(build_source(by['amazon']), AmazonSource)
 
 
 def test_manual_source_error_is_classified():
