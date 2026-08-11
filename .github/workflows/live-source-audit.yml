@@ -15,12 +15,13 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     continue-on-error: true
     strategy:
       fail-fast: false
+      max-parallel: 6
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,7 +40,7 @@ jobs:
         run: >-
           python -m job_fetcher.live_audit
           --shard-index ${{ matrix.shard }}
-          --shard-count 12
+          --shard-count 6
           --sample-urls 3
           --output reports/live-audit-${{ matrix.shard }}.json
       - name: Upload audit report
