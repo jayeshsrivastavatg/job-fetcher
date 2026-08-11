@@ -63,10 +63,8 @@ def test_official_html_parses_oracle_branded_job_link():
 def test_recovery_registry_covers_every_current_red_failure():
     from job_fetcher.sources.recovery import RECOVERY_PLANS
 
-    # Captured from the user's failing-company run on 2026-08-12. Zomato/Blinkit
-    # is intentionally excluded: Eternal's first-party careers page currently says
-    # it accepts applications only via employee referral and exposes no public jobs
-    # feed to fetch.
+    # Captured from the failing-company run on 2026-08-12. Zomato/Blinkit is
+    # intentionally excluded: Eternal currently exposes no public jobs feed.
     expected = {
         "atlassian",
         "microsoft",
@@ -86,9 +84,10 @@ def test_recovery_registry_covers_every_current_red_failure():
     assert expected <= set(RECOVERY_PLANS)
 
 
-def test_factory_routes_known_failures_through_recovery():
+def test_factory_routes_known_failure_through_adapter_compatible_recovery():
+    from job_fetcher.sources.eightfold import EightfoldSource
     from job_fetcher.sources.factory import build_source
-    from job_fetcher.sources.recovery import RecoverySource
+    from job_fetcher.sources.recovery_adapters import RecoveryEightfoldSource
 
     company = {
         "id": "microsoft",
@@ -96,7 +95,9 @@ def test_factory_routes_known_failures_through_recovery():
         "career_url": "https://apply.careers.microsoft.com/careers",
         "source": {"type": "eightfold", "entry_url": "https://apply.careers.microsoft.com/careers"},
     }
-    assert isinstance(build_source(company), RecoverySource)
+    source = build_source(company)
+    assert isinstance(source, RecoveryEightfoldSource)
+    assert isinstance(source, EightfoldSource)
 
 
 def test_factory_keeps_healthy_company_on_configured_adapter():
