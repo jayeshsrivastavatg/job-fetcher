@@ -17,15 +17,18 @@ def _rowdict(row) -> dict[str, Any]:
 
 
 def _change_type(row: dict[str, Any], previous: dict[str, Any] | None, source_hash: str) -> str:
+    # Change events belong to the fetch/content lifecycle, not the scoring-rules
+    # lifecycle. A location-ruleset upgrade intentionally changes source_hash to
+    # force re-analysis, but must not make 15k unchanged jobs look CHANGED to the
+    # downstream incremental AI handoff.
     fetch_change = str(row.get("last_change_type") or "").lower()
-    if previous is None:
-        if fetch_change in {"new", "changed"}:
-            return fetch_change
-        return "baseline"
-    if previous.get("source_hash") != source_hash:
-        return "changed"
     if fetch_change in {"new", "changed", "unchanged", "baseline"}:
         return fetch_change
+    if previous is None:
+        return "baseline"
+    # Compatibility fallback for very old rows that predate last_change_type.
+    if previous.get("source_hash") != source_hash:
+        return "changed"
     return "unchanged"
 
 
