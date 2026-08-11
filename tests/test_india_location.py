@@ -70,6 +70,7 @@ from job_fetcher.india_location import classify_india_location, is_india_job
     "Srinagar, Jammu and Kashmir",
     "Panaji, Goa",
     "Puducherry",
+    "Delhi NCR",
 ])
 def test_common_india_location_variants(location):
     result = classify_india_location(location)
@@ -107,6 +108,13 @@ def test_raw_json_string_is_supported():
     assert classify_india_location("", raw=raw).is_india
 
 
+def test_structured_region_code_is_understood():
+    raw = {"primaryLocation": {"region": "KA", "city": "Bengaluru"}}
+    result = classify_india_location("Office Campus", raw=raw)
+    assert result.is_india
+    assert "India" in result.normalized_location
+
+
 def test_description_location_header_is_used_only_as_fallback():
     result = classify_india_location(
         "Remote",
@@ -134,10 +142,40 @@ def test_strong_india_remote_language_is_supported():
     "Dublin, Ireland",
     "Tokyo, Japan",
     "Dubai, United Arab Emirates",
+    "Dhaka, Bangladesh",
+    "Kathmandu, Nepal",
+    "Colombo, Sri Lanka",
+    "Lahore, Pakistan",
     "Remote - US",
 ])
 def test_explicit_foreign_locations_are_not_india(location):
     assert not classify_india_location(location).is_india
+
+
+def test_foreign_country_beats_shared_indian_city_name():
+    result = classify_india_location("Hyderabad, Sindh, Pakistan")
+    assert result.status == "foreign"
+    assert not result.is_india
+
+
+def test_foreign_country_beats_shared_indian_region_name():
+    result = classify_india_location("Lahore, Punjab, Pakistan")
+    assert result.status == "foreign"
+    assert not result.is_india
+
+
+def test_structured_foreign_country_beats_indian_city_alias():
+    raw = {"primaryLocation": {"city": "Hyderabad", "country": "Pakistan"}}
+    result = classify_india_location("Hyderabad", raw=raw)
+    assert result.status == "foreign"
+    assert not result.is_india
+
+
+def test_structured_foreign_iso_code_beats_indian_city_alias():
+    raw = {"primaryLocation": {"city": "Salem", "countryCode": "US"}}
+    result = classify_india_location("Salem", raw=raw)
+    assert result.status == "foreign"
+    assert not result.is_india
 
 
 def test_unknown_remote_is_not_assumed_india():
@@ -164,6 +202,11 @@ def test_austin_indiana_code_is_not_treated_as_india_country_code():
 
 def test_multi_location_role_is_kept_when_india_is_one_valid_location():
     assert classify_india_location("Bengaluru, India / London, United Kingdom").is_india
+
+
+def test_structured_multi_country_role_is_kept_when_india_is_allowed():
+    raw = {"allowedCountries": [{"countryCode": "US"}, {"countryCode": "IN"}]}
+    assert classify_india_location("Remote", raw=raw).is_india
 
 
 def test_generic_reference_to_india_team_does_not_make_remote_job_indian():
