@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from job_fetcher.sources.auto import AutoSource
 from job_fetcher.sources.http_client import session, timeout_seconds
+from job_fetcher.sources.strict_auto import StrictAutoSource
 
 
-class ZeroAwareAutoSource(AutoSource):
+class ZeroAwareAutoSource(StrictAutoSource):
     """Avoid turning navigation links into fake jobs on explicit empty boards.
 
     This is used only for sources configured with allow_zero_jobs. Generic link
@@ -21,6 +21,6 @@ class ZeroAwareAutoSource(AutoSource):
             if self._is_empty(response.text):
                 return []
         except Exception:
-            # The normal AutoSource path owns network/browser fallback semantics.
+            # The normal StrictAutoSource path owns network/browser fallback semantics.
             pass
         return super().fetch(company)

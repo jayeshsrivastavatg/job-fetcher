@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from job_fetcher.sources.atlassian import AtlassianSource
-from job_fetcher.sources.auto import AutoSource
 from job_fetcher.sources.avature import AvatureSource
 from job_fetcher.sources.eightfold import EightfoldSource
 from job_fetcher.sources.oracle import OracleSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.recovery_best import BestRecoverySource
+from job_fetcher.sources.strict_auto import StrictAutoSource
 
 
-class RecoveryAutoSource(AutoSource):
-    """AutoSource-compatible adapter with first-party recovery before AutoSource."""
+class RecoveryAutoSource(StrictAutoSource):
+    """AutoSource-compatible adapter with first-party recovery before strict auto."""
 
     def fetch(self, company):
-        return BestRecoverySource(primary_source=AutoSource()).fetch(company)
+        return BestRecoverySource(primary_source=StrictAutoSource()).fetch(company)
 
 
 class RecoveryEightfoldSource(EightfoldSource):
