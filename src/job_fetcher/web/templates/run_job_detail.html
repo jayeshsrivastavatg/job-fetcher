@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Historical Job · {{ job.title }}{% endblock %}
+{% block heading %}{{ job.title }}{% endblock %}
+{% block eyebrow %}<a class="breadcrumb" href="/history/runs/{{ run.id }}">Fetch Run #{{ run.id }}</a> / historical job{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="run-topline"><div><span class="candidate-change">{{ job.event_type|title }}</span> {% if job.is_relevant %}<span class="plain-state on">Relevant</span>{% else %}<span class="plain-state">Not relevant</span>{% endif %}</div><div>{% if job.relevance_score is not none %}<strong>Score {{ "%.0f"|format(job.relevance_score) }}</strong>{% endif %}</div></div>
+  <div class="metric-grid run-metrics">
+    <div><span>Company</span><strong>{{ job.company_name }}</strong></div>
+    <div><span>Location</span><strong>{{ job.normalized_location or job.location or 'Unknown' }}</strong></div>
+    <div><span>Posted</span><strong>{{ job.posted_at[:10] if job.posted_at else '—' }}</strong></div>
+    <div><span>First found</span><strong>{{ job.first_seen_at[:10] if job.first_seen_at else '—' }}</strong></div>
+    <div><span>Role family</span><strong>{{ job.role_label or '—' }}</strong></div>
+    <div><span>Experience</span><strong>{% if job.min_experience is not none %}{% if job.max_experience is not none %}{{ "%g"|format(job.min_experience) }}–{{ "%g"|format(job.max_experience) }} yrs{% else %}{{ "%g"|format(job.min_experience) }}+ yrs{% endif %}{% else %}Not stated{% endif %}</strong></div>
+  </div>
+  <div class="button-row">
+    {% if job.job_url %}<a class="btn btn-primary" href="{{ job.job_url }}" target="_blank" rel="noopener">Open Job Posting</a>{% endif %}
+    <a class="btn btn-ghost" href="/history/runs/{{ run.id }}">Back to Run</a>
+  </div>
+</section>
+<section class="panel">
+  <div class="panel-header"><div><h2>Frozen job description</h2><p>This is the content version recorded for this exact run, not the current mutable job row.</p></div></div>
+  <div class="job-description" style="white-space:pre-wrap">{{ job.description or 'No description was captured.' }}</div>
+</section>
+{% endblock %}
