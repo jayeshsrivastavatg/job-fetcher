@@ -22,6 +22,7 @@ from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
 from job_fetcher.sources.nutanix import NutanixSource
+from job_fetcher.sources.intuit import IntuitIndiaSource
 from job_fetcher.sources.fixed_provider import FixedProviderSource
 
 SOURCES = {
@@ -49,9 +50,6 @@ SOURCES = {
     "trakstar": TrakstarSource,
 }
 
-# Public ATS boards independently verified from the employer's branded careers
-# surface. Using the provider API directly gives exhaustive pagination and prevents
-# generic marketing/navigation pages from ever becoming candidate jobs.
 _GREENHOUSE_OVERRIDES = {
     "postman": "postman",
     "razorpay": "razorpaysoftwareprivatelimited",
@@ -69,7 +67,6 @@ _SMARTRECRUITERS_OVERRIDES = {
 
 
 def build_raw_source(company):
-    """Build exactly the adapter configured in companies.yaml."""
     source_type = company["source"]["type"]
     if source_type not in SOURCES:
         raise ValueError(f"Unsupported source type: {source_type}")
@@ -80,12 +77,14 @@ def build_source(company):
     """Return the strongest verified public adapter for this company."""
     company_id = str(company.get("id") or "")
 
-    if company_id == "microsoft":
-        return MicrosoftIndiaSource()
-    if company_id == "atlassian":
-        return AtlassianSource()
-    if company_id == "nutanix":
-        return NutanixSource()
+    dedicated = {
+        "microsoft": MicrosoftIndiaSource,
+        "atlassian": AtlassianSource,
+        "nutanix": NutanixSource,
+        "intuit": IntuitIndiaSource,
+    }
+    if company_id in dedicated:
+        return dedicated[company_id]()
 
     if company_id in _GREENHOUSE_OVERRIDES:
         return FixedProviderSource(
@@ -98,8 +97,6 @@ def build_source(company):
             {"type": "smartrecruiters", "company_identifier": _SMARTRECRUITERS_OVERRIDES[company_id]},
         )
 
-    # A few employers have moved to a cleaner public provider/API than the source
-    # originally discovered for their branded career page.
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
         from job_fetcher.sources.current_provider_overrides import (
             AmazonJsonSource,
