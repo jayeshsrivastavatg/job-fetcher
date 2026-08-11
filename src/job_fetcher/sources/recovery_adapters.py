@@ -5,6 +5,7 @@ from job_fetcher.sources.auto import AutoSource
 from job_fetcher.sources.avature import AvatureSource
 from job_fetcher.sources.eightfold import EightfoldSource
 from job_fetcher.sources.oracle import OracleSource
+from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.recovery_best import BestRecoverySource
 
 
@@ -43,12 +44,20 @@ class RecoveryOracleSource(OracleSource):
         return BestRecoverySource(primary_source=OracleSource()).fetch(company)
 
 
+class RecoveryPhenomSource(PhenomSource):
+    """PhenomSource-compatible adapter with richer branded-page recovery."""
+
+    def fetch(self, company):
+        return BestRecoverySource(primary_source=PhenomSource()).fetch(company)
+
+
 RECOVERY_ADAPTERS = {
     "auto": RecoveryAutoSource,
     "eightfold": RecoveryEightfoldSource,
     "atlassian": RecoveryAtlassianSource,
     "avature": RecoveryAvatureSource,
     "oracle": RecoveryOracleSource,
+    "phenom": RecoveryPhenomSource,
 }
 
 
