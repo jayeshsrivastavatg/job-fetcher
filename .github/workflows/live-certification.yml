@@ -1,0 +1,102 @@
+name: Live Company Certification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 1 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "config/companies.yaml"
+      - "src/job_fetcher/sources/**"
+      - "src/job_fetcher/job_quality.py"
+      - "src/job_fetcher/certification.py"
+      - ".github/workflows/live-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-company-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: audit shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    env:
+      JOB_FETCHER_BROWSER_TIMEOUT_MS: "60000"
+      JOB_FETCHER_BROWSER_MAX_PAGES: "10"
+      JOB_FETCHER_BROWSER_MAX_SCROLLS: "14"
+      JOB_FETCHER_BROWSER_LOAD_MORE_CLICKS: "16"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -U pip && pip install -e '.[dev]'
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Audit companies
+        run: >-
+          python -m job_fetcher.certification audit
+          --shard-index ${{ matrix.shard }}
+          --shard-count 8
+          --sample-size 3
+          --detail-timeout 10
+          --output-dir reports/certification/shard-${{ matrix.shard }}
+      - name: Upload shard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: certification-shard-${{ matrix.shard }}
+          path: reports/certification/shard-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  merge:
+    name: merge certification evidence
+    needs: audit
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package
+        run: python -m pip install -U pip && pip install -e .
+      - name: Download shard evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: certification-shard-*
+          path: reports/shards
+      - name: Merge reports
+        run: >-
+          python -m job_fetcher.certification merge
+          --input-dir reports/shards
+          --output-dir reports/certification
+      - name: Publish certification summary
+        if: always()
+        run: |
+          if [ -f reports/certification/company_certification.md ]; then
+            cat reports/certification/company_certification.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload full certification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-certification-report
+          path: reports/certification
+          if-no-files-found: warn
+          retention-days: 30
