@@ -31,9 +31,10 @@ _NAVIGATION_EXACT = {
     "values at navi", "explore more", "contact sales", "contact support",
 }
 _NAVIGATION_RE = re.compile(
-    r"(?:\b(?:privacy|cookie|terms|policy)\b|\b(?:benefits?|perks?|awards?|resources?|"
+    r"(?:\b(?:privacy|cookie|terms|policy|careers?)\b|\b(?:benefits?|perks?|awards?|resources?|"
     r"teams?|culture|values?|products?|solutions?|developers?)\b|\blife\s+at\b|"
-    r"\bcandidate\s+resources?\b|\bcareer\s+growth\b|\bask questions,?\s*report bugs\b)",
+    r"\bjobs?\s+at\b|\bteams?\s+at\b|\bvalues?\s+at\b|\bcandidate\s+resources?\b|"
+    r"\bcareer\s+growth\b|\bask questions,?\s*report bugs\b)",
     re.I,
 )
 _HTMLISH_SOURCE_RE = re.compile(r"(?:^|_)(?:generic|browser|recovery_browser|official)_?html$|_html$", re.I)
