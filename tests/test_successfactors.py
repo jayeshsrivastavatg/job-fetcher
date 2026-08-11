@@ -36,7 +36,7 @@ def test_finds_jobs2web_pagination_links_not_job_links():
     assert links[0].startswith("https://careers.payu.in/PayU/go/_/514880/25/")
 
 
-def test_crawls_multiple_pages(monkeypatch):
+def test_crawls_multiple_pages_and_reconciles_total(monkeypatch):
     pages = {
       "https://careers.payu.in/PayU/go/_/514880/": '''
         <div>Results 1 – 1 of 2</div>
@@ -53,5 +53,6 @@ def test_crawls_multiple_pages(monkeypatch):
         def raise_for_status(self): pass
     class C:
         def get(self, url, **kwargs): return R(url)
-    jobs = SuccessFactorsSource()._crawl_listing(COMPANY, C(), list(pages)[0], max_pages=5, max_jobs=100)
+    jobs, total = SuccessFactorsSource()._crawl_listing(COMPANY, C(), list(pages)[0], max_pages=5, max_jobs=100)
+    assert total == 2
     assert [j.external_id for j in jobs] == ["111", "222"]
