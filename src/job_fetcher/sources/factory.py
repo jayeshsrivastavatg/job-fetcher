@@ -56,10 +56,15 @@ def build_raw_source(company):
 
 
 def build_source(company):
-    """Public factory contract: return the adapter configured for the company.
+    """Return the configured adapter, enhanced with recovery where necessary.
 
-    Recovery is applied by the fetch/health orchestration layer rather than here,
-    so diagnostics and existing callers can still rely on the configured adapter
-    type (AtlassianSource, EightfoldSource, AvatureSource, etc.).
+    Recovery wrappers subclass the configured adapter (AutoSource, EightfoldSource,
+    AtlassianSource or AvatureSource), so existing diagnostics/type expectations
+    remain valid while actual fetches get the hardened first-party fallback paths.
     """
+    from job_fetcher.sources.recovery import has_recovery_plan
+
+    if has_recovery_plan(company):
+        from job_fetcher.sources.recovery_adapters import build_recovery_adapter
+        return build_recovery_adapter(company)
     return build_raw_source(company)
