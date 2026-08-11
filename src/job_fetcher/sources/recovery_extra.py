@@ -63,4 +63,28 @@ RECOVERY_PLANS.update({
             "browser_max_scrolls": 10,
         },
     ],
+    "zomato_blinkit": [
+        {
+            "kind": "smartrecruiters",
+            "company_identifier": "Zomato1",
+        },
+    ],
+    "winzo": [
+        {
+            "kind": "official_html",
+            "entry_url": "https://winzo.keka.com/careers",
+            "max_pages": 20,
+            "job_href_patterns": [
+                r"winzo\.keka\.com/careers/jobdetails/\d+",
+                r"/careers/jobdetails/\d+",
+            ],
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://winzo.keka.com/careers",
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 15,
+            "browser_load_more_clicks": 20,
+        },
+    ],
 })
