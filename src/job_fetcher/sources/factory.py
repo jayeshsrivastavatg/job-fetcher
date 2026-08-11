@@ -21,6 +21,8 @@ from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
+from job_fetcher.sources.nutanix import NutanixSource
+from job_fetcher.sources.fixed_provider import FixedProviderSource
 
 SOURCES = {
     "auto": StrictAutoSource,
@@ -47,6 +49,24 @@ SOURCES = {
     "trakstar": TrakstarSource,
 }
 
+# Public ATS boards independently verified from the employer's branded careers
+# surface. Using the provider API directly gives exhaustive pagination and prevents
+# generic marketing/navigation pages from ever becoming candidate jobs.
+_GREENHOUSE_OVERRIDES = {
+    "postman": "postman",
+    "razorpay": "razorpaysoftwareprivatelimited",
+    "inmobi": "inmobi",
+    "elastic": "elastic",
+    "hackerrank": "hackerrank",
+    "twilio": "twilio",
+}
+_SMARTRECRUITERS_OVERRIDES = {
+    "freshworks": "freshworks",
+    "arista_networks": "AristaNetworks",
+    "zomato_blinkit": "Zomato1",
+    "nagarro": "Nagarro1",
+}
+
 
 def build_raw_source(company):
     """Build exactly the adapter configured in companies.yaml."""
@@ -57,26 +77,29 @@ def build_raw_source(company):
 
 
 def build_source(company):
-    """Return the configured adapter, enhanced with recovery where necessary.
-
-    Recovery wrappers subclass the configured adapter, so existing diagnostics and
-    type expectations remain valid while actual fetches get hardened first-party
-    fallback paths.
-    """
+    """Return the strongest verified public adapter for this company."""
     company_id = str(company.get("id") or "")
 
-    # Companies with a verified dedicated public index/provider should bypass the
-    # generic recovery layer entirely. This prevents a non-job browser fragment
-    # from outscoring the real dedicated parser merely because it returned more
-    # title+URL pairs.
     if company_id == "microsoft":
         return MicrosoftIndiaSource()
     if company_id == "atlassian":
         return AtlassianSource()
+    if company_id == "nutanix":
+        return NutanixSource()
+
+    if company_id in _GREENHOUSE_OVERRIDES:
+        return FixedProviderSource(
+            GreenhouseSource(),
+            {"type": "greenhouse", "board_token": _GREENHOUSE_OVERRIDES[company_id]},
+        )
+    if company_id in _SMARTRECRUITERS_OVERRIDES:
+        return FixedProviderSource(
+            SmartRecruitersSource(),
+            {"type": "smartrecruiters", "company_identifier": _SMARTRECRUITERS_OVERRIDES[company_id]},
+        )
 
     # A few employers have moved to a cleaner public provider/API than the source
-    # originally discovered for their branded career page. Keep these overrides
-    # isolated so they are easy to remove if the employer changes providers again.
+    # originally discovered for their branded career page.
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
         from job_fetcher.sources.current_provider_overrides import (
             AmazonJsonSource,
@@ -92,16 +115,11 @@ def build_source(company):
         }
         return current[company_id]()
 
-    # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
-    # Check that signal before generic extraction can mistake navigation links for
-    # vacancies (Zerodha is the current example).
     source = company.get("source") or {}
     if source.get("type") == "auto" and source.get("allow_zero_jobs"):
         from job_fetcher.sources.zero_aware_auto import ZeroAwareAutoSource
         return ZeroAwareAutoSource()
 
-    # Importing the second-pass registry mutates the shared recovery plan mapping
-    # before we decide whether this company needs a wrapper.
     import job_fetcher.sources.recovery_extra  # noqa: F401
     from job_fetcher.sources.recovery import has_recovery_plan
 
