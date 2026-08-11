@@ -1,0 +1,48 @@
+name: Live Source Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/job_fetcher/**'
+      - 'config/companies.yaml'
+      - '.github/workflows/live-source-audit.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install package
+        run: python -m pip install -U pip && pip install -e '.[dev]'
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Audit live company sources
+        env:
+          JOB_FETCHER_TIMEOUT_SECONDS: '18'
+          JOB_FETCHER_BROWSER_TIMEOUT_MS: '45000'
+          JOB_FETCHER_BROWSER_MAX_PAGES: '12'
+        run: >-
+          python -m job_fetcher.live_audit
+          --shard-index ${{ matrix.shard }}
+          --shard-count 12
+          --sample-urls 3
+          --output reports/live-audit-${{ matrix.shard }}.json
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-source-audit-${{ matrix.shard }}
+          path: reports/live-audit-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 7
