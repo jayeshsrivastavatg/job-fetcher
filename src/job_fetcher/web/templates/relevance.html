@@ -40,6 +40,8 @@
   <label><span>Status</span><select name="status"><option value="">All statuses</option>{% for value,label in [('high','High'),('good','Good'),('possible','Possible'),('low','Low'),('filtered','Filtered'),('duplicate','Duplicate')] %}<option value="{{ value }}" {% if filters.status==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span>Role family</span><select name="family"><option value="">All families</option>{% for value,label in families %}<option value="{{ value }}" {% if filters.family==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span>Change</span><select name="change_type"><option value="">All</option>{% for value,label in [('new','New'),('changed','Changed'),('baseline','Baseline'),('unchanged','Unchanged')] %}<option value="{{ value }}" {% if filters.change_type==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>Posted since</span><input name="posted_since" type="date" value="{{ filters.posted_since or '' }}"></label>
+  <label><span>First found since</span><input name="first_seen_since" type="date" value="{{ filters.first_seen_since or '' }}"></label>
   <label><span>Min score</span><input name="min_score" type="number" min="0" max="100" step="1" value="{{ filters.min_score if filters.min_score is not none else '' }}" placeholder="0"></label>
   <label class="check-label boxed"><input type="checkbox" name="relevant_only" value="true" {% if filters.relevant_only %}checked{% endif %}><span>Relevant only</span></label>
   <button class="btn btn-secondary" type="submit">Apply</button><a class="btn btn-ghost" href="/relevance">Clear</a>
@@ -48,7 +50,7 @@
 
 <section class="panel table-panel">
 {% if jobs %}
-<div class="table-wrap"><table class="data-table"><thead><tr><th>Score</th><th>Title</th><th>Company</th><th>Role family</th><th>Experience</th><th>Change</th><th>Status</th><th>Relevant</th></tr></thead><tbody>
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Score</th><th>Title</th><th>Company</th><th>Role family</th><th>Experience</th><th>Posted</th><th>First found</th><th>Change</th><th>Status</th><th>Relevant</th></tr></thead><tbody>
 {% for j in jobs %}
 <tr>
   <td><span class="score-pill score-{{ j.relevance_status }}">{{ "%.0f"|format(j.relevance_score) }}</span></td>
@@ -56,6 +58,8 @@
   <td>{{ j.company_name }}</td>
   <td>{{ j.role_label or '—' }}</td>
   <td>{% if j.min_experience is not none %}{% if j.max_experience is not none %}{{ "%g"|format(j.min_experience) }}–{{ "%g"|format(j.max_experience) }} yrs{% else %}{{ "%g"|format(j.min_experience) }}+ yrs{% endif %}{% else %}Not stated{% endif %}</td>
+  <td>{{ j.posted_at[:10] if j.posted_at else '—' }}</td>
+  <td>{{ j.first_seen_at[:10] if j.first_seen_at else '—' }}</td>
   <td><span class="candidate-change">{{ (j.change_type or '—')|title }}</span></td>
   <td><span class="candidate-state state-{{ j.relevance_status }}">{{ j.relevance_status|title }}</span>{% if j.filter_reason %}<span class="row-subtext truncate">{{ j.filter_reason }}</span>{% endif %}</td>
   <td>{% if j.is_relevant %}<span class="plain-state on">Yes</span>{% else %}<span class="plain-state">No</span>{% endif %}</td>
