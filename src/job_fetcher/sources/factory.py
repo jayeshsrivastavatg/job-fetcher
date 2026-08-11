@@ -23,6 +23,7 @@ from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.microsoft_india import MicrosoftIndiaSource
 from job_fetcher.sources.nutanix import NutanixSource
 from job_fetcher.sources.intuit import IntuitIndiaSource
+from job_fetcher.sources.media_net import MediaNetSource
 from job_fetcher.sources.fixed_provider import FixedProviderSource
 
 SOURCES = {
@@ -64,6 +65,9 @@ _SMARTRECRUITERS_OVERRIDES = {
     "zomato_blinkit": "Zomato1",
     "nagarro": "Nagarro1",
 }
+_SUCCESSFACTORS_OVERRIDES = {
+    "chargebee": "https://jobs.chargebee.com/",
+}
 
 
 def build_raw_source(company):
@@ -82,6 +86,7 @@ def build_source(company):
         "atlassian": AtlassianSource,
         "nutanix": NutanixSource,
         "intuit": IntuitIndiaSource,
+        "media_net": MediaNetSource,
     }
     if company_id in dedicated:
         return dedicated[company_id]()
@@ -95,6 +100,11 @@ def build_source(company):
         return FixedProviderSource(
             SmartRecruitersSource(),
             {"type": "smartrecruiters", "company_identifier": _SMARTRECRUITERS_OVERRIDES[company_id]},
+        )
+    if company_id in _SUCCESSFACTORS_OVERRIDES:
+        return FixedProviderSource(
+            SuccessFactorsSource(),
+            {"type": "successfactors", "entry_url": _SUCCESSFACTORS_OVERRIDES[company_id], "max_pages": 50, "max_jobs": 5000},
         )
 
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
