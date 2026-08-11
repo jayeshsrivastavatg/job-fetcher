@@ -2,6 +2,8 @@ name: Bootstrap repository
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
@@ -11,13 +13,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Decode and expand verified baseline
+      - name: Expand verified baseline
+        shell: bash
         run: |
+          set -euo pipefail
+          if [ ! -f job-fetcher-github-baseline.zip ]; then
+            echo "Baseline already expanded; nothing to do."
+            exit 0
+          fi
           base64 --decode job-fetcher-github-baseline.zip > baseline.zip
+          unzip -t baseline.zip
           unzip -o baseline.zip
-          rm -f baseline.zip job-fetcher-github-baseline.zip .github/workflows/bootstrap.yml .github-seed
+          # Workflow files are installed later through the GitHub connector.
+          # The Actions token can be blocked from modifying .github/workflows.
+          rm -f .github/workflows/ci.yml
+          rm -f job-fetcher-github-baseline.zip baseline.zip .github-seed
       - name: Commit project baseline
+        shell: bash
         run: |
+          set -euo pipefail
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "No project changes to commit."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
