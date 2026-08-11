@@ -36,9 +36,13 @@
 <section class="panel compact-panel">
   <div class="candidate-actions">
     <div>
-      <strong>AI-ready immutable file</strong>
-      <span class="muted">{{ summary.ai_input_count }} NEW/CHANGED relevant jobs · SHA-256 {{ artifact.sha256[:12] }}…</span>
-      <span class="row-subtext">Generated {{ artifact.generated_at[:19] }} UTC{% if artifact.downloaded_at %} · downloaded before{% endif %}{% if artifact.git_prepared_at %} · Git copy prepared{% endif %}</span>
+      <strong>AI-ready immutable file{% if delivery_mode %} · {{ delivery_mode|title }}{% endif %}</strong>
+      {% if delivery_mode == 'baseline' %}
+      <span class="muted">{{ summary.ai_input_count }} currently relevant India jobs · initial App-2 baseline</span>
+      {% else %}
+      <span class="muted">{{ summary.ai_input_count }} NEW/CHANGED relevant India jobs · incremental App-2 handoff</span>
+      {% endif %}
+      <span class="row-subtext">Generated {{ artifact.generated_at[:19] }} UTC · SHA-256 {{ artifact.sha256[:12] }}…{% if artifact.downloaded_at %} · downloaded before{% endif %}{% if artifact.git_prepared_at %} · Git copy prepared{% endif %}</span>
     </div>
     <div class="button-row">
       <a class="btn btn-primary" href="/history/runs/{{ run.id }}/download/ai-input">Download AI Input</a>
@@ -48,7 +52,7 @@
       </form>
     </div>
   </div>
-  <p class="muted">The AI file is frozen for this run. Preparing a GitHub copy writes it under <code>run-history/</code>; review it before committing, especially if this repository is public.</p>
+  <p class="muted">{% if delivery_mode == 'baseline' %}The first App-2 handoff intentionally contains all relevant India jobs observed in this frozen run. Future run files contain only relevant jobs that are NEW or CHANGED.{% else %}This incremental handoff contains only relevant India jobs that are NEW or CHANGED since previous runs.{% endif %} Historical job/JD snapshots remain frozen for this run.</p>
 </section>
 {% elif summary and summary.artifact_error %}
 <section class="panel"><div class="run-error"><strong>AI artifact generation failed</strong><code>{{ summary.artifact_error }}</code></div></section>
