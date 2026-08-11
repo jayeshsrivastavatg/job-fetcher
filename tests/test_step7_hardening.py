@@ -90,6 +90,7 @@ def test_urban_jobdetail_links_are_generic_job_links():
 
 
 def test_auto_403_escalates_to_browser(monkeypatch):
+    monkeypatch.delenv("JOB_FETCHER_DISABLE_BROWSER", raising=False)
     company = {
         "id": "rippling", "name": "Rippling",
         "career_url": "https://www.rippling.com/careers/open-roles",
