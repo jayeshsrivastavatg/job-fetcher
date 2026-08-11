@@ -58,7 +58,10 @@ def _build_finalized_run(monkeypatch, tmp_path):
         new, existing, deactivated = jobs.upsert_snapshot("acme", current, complete=True)
     finally:
         jobs.close()
-    assert (new, existing, deactivated) == (1, 1, 1)
+    # The legacy JobStore `deactivated` value is a net active-count delta, so one
+    # closure plus one new job nets to zero. RunHistory derives CLOSED exactly
+    # from before-vs-returned membership instead of relying on that metric.
+    assert (new, existing, deactivated) == (1, 1, 0)
 
     history.record_company_snapshot(
         run_id,
