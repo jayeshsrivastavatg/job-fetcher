@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Runs · Job Fetcher{% endblock %}
+{% block heading %}Runs{% endblock %}
+{% block eyebrow %}Execution history{% endblock %}
+{% block content %}
+<div class="tabs"><a href="/runs?kind=fetch" class="{% if kind=='fetch' %}active{% endif %}">Fetch Runs</a><a href="/runs?kind=verify" class="{% if kind=='verify' %}active{% endif %}">Verification Runs</a></div>
+<section class="panel table-panel">
+{% if runs %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Run</th><th>Started</th><th>Duration</th><th>Companies</th><th>Healthy</th><th>Fallback</th><th>Suspicious</th><th>Failed</th><th>{% if kind=='fetch' %}Jobs / New{% else %}Jobs detected{% endif %}</th><th>Status</th></tr></thead><tbody>
+{% for r in runs %}<tr class="clickable" data-href="/runs/{{ r.id }}"><td><strong>#{{ r.id }}</strong><small class="row-subtext">{{ r.scope }}</small></td><td><time class="local-time" datetime="{{ r.started_at or r.created_at }}"></time></td><td><span data-duration-start="{{ r.started_at }}" data-duration-end="{{ r.finished_at }}">—</span></td><td>{{ r.completed_companies }} / {{ r.total_companies }}</td><td>{{ r.healthy }}</td><td>{{ r.fallback }}</td><td>{{ r.suspicious }}</td><td>{{ r.failed }}</td><td>{% if kind=='fetch' %}{{ r.jobs_found }} / <strong>{{ r.jobs_new }}</strong>{% else %}{{ r.jobs_found }}{% endif %}</td><td>{{ badge(r.status) }}</td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty-state"><strong>No {{ kind }} runs yet.</strong><span>Start one from the header or Dashboard.</span></div>{% endif %}
+</section>
+{% endblock %}

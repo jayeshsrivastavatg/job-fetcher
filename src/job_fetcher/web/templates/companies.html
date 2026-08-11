@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Companies · Job Fetcher{% endblock %}
+{% block heading %}Companies{% endblock %}
+{% block eyebrow %}Configuration & operations{% endblock %}
+{% block content %}
+<section class="page-toolbar">
+  <div><strong>{{ total_companies }}</strong> configured <span class="sep">·</span> <strong>{{ enabled_count }}</strong> enabled</div>
+  <button class="btn btn-primary" data-open-dialog="add-company-dialog">+ Add Company</button>
+</section>
+
+<section class="panel compact-panel">
+  <form class="filters" method="get">
+    <label class="search-field"><span class="sr-only">Search companies</span><input name="q" value="{{ filters.q }}" placeholder="Search companies…"></label>
+    <label><span>Status</span><select name="enabled" onchange="this.form.submit()"><option value="all">All</option><option value="enabled" {% if filters.enabled=='enabled' %}selected{% endif %}>Enabled</option><option value="disabled" {% if filters.enabled=='disabled' %}selected{% endif %}>Disabled</option></select></label>
+    <label><span>Health</span><select name="health" onchange="this.form.submit()"><option value="all">All</option>{% for x,label in [('healthy','Healthy'),('healthy_with_fallback','Fallback'),('suspicious','Suspicious'),('failed','Failed'),('never_verified','Never verified')] %}<option value="{{ x }}" {% if filters.health==x %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label><span>Source</span><select name="source" onchange="this.form.submit()"><option value="all">All</option>{% for s in sources %}<option value="{{ s }}" {% if filters.source==s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    {% if filters.q or filters.enabled!='all' or filters.health!='all' or filters.source!='all' %}<a class="btn btn-ghost" href="/companies">Clear</a>{% endif %}
+  </form>
+</section>
+
+<section class="panel table-panel">
+  {% if companies %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Company</th><th>Enabled</th><th>Source</th><th>Health</th><th class="num">Jobs</th><th>Last verified</th><th>Last fetch</th><th class="actions-col"></th></tr></thead>
+      <tbody>
+      {% for c in companies %}
+        <tr>
+          <td><a class="strong-link" href="/companies/{{ c.id }}">{{ c.name }}</a><small class="row-subtext">{{ c.id }}</small></td>
+          <td>{% if c.enabled %}<span class="plain-state on">Yes</span>{% else %}<span class="plain-state">No</span>{% endif %}</td>
+          <td><code class="source-code">{{ c.source.type }}</code></td>
+          <td>{{ badge(c.resolved_health) }}</td>
+          <td class="num">{{ c.active_jobs }}</td>
+          <td>{% if c.health_result %}<time class="local-time" datetime="{{ c.health_result.run_created_at }}"></time>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>{% if c.fetch_result %}<time class="local-time" datetime="{{ c.fetch_result.run_created_at }}"></time>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="actions-col">
+            <details class="row-menu"><summary aria-label="Actions">•••</summary><div class="menu-popover">
+              {% if c.enabled %}
+                <button data-company-run="fetch" data-company-id="{{ c.id }}">Fetch</button>
+                <button data-company-run="verify" data-company-id="{{ c.id }}">Verify</button>
+                <a href="/companies/{{ c.id }}#edit">Edit</a>
+                <button data-set-enabled="false" data-company-id="{{ c.id }}">Disable</button>
+              {% else %}
+                <a href="/companies/{{ c.id }}#edit">Edit</a>
+                <button data-set-enabled="true" data-company-id="{{ c.id }}">Enable</button>
+              {% endif %}
+            </div></details>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty-state"><strong>No companies match these filters.</strong><a class="text-link" href="/companies">Clear filters</a></div>{% endif %}
+</section>
+
+<dialog id="add-company-dialog" class="dialog">
+  <form id="add-company-form" class="stack-form">
+    <div class="dialog-header"><div><h2>Add Company</h2><p>Add a careers source and verify it immediately.</p></div><button type="button" class="icon-btn" data-close-dialog>×</button></div>
+    <div class="form-grid two">
+      <label><span>Company name</span><input name="name" required placeholder="Datadog"></label>
+      <label><span>Career URL</span><input name="career_url" type="url" required placeholder="https://careers.example.com"></label>
+      <label><span>Source</span><select name="source_type" data-source-select>{% for s in source_schema.types %}<option value="{{ s }}" {% if s=='auto' %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      <label class="check-label"><input name="enabled" type="checkbox" checked><span>Enabled</span></label>
+    </div>
+    <details class="advanced"><summary>Advanced source configuration</summary><div class="source-fields" data-source-fields></div></details>
+    <div class="form-error" data-form-error></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-ghost" data-close-dialog>Cancel</button><button class="btn btn-primary" type="submit">Add & Verify</button></div>
+  </form>
+</dialog>
+{% endblock %}

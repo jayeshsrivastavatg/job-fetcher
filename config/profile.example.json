@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "candidate": {
+    "experienceYears": 5.0,
+    "targetCountry": "India"
+  },
+  "experiencePolicy": {
+    "preferredMinimumJDExperience": 2.0,
+    "idealExperience": 5.0,
+    "allowOneYearStretch": true,
+    "hardRejectMinimumYears": 8.0
+  },
+  "locationPolicy": {
+    "mode": "india_preferred",
+    "rejectExplicitForeign": true,
+    "preferredLocations": [
+      "India",
+      "Bengaluru",
+      "Bangalore",
+      "Gurugram",
+      "Gurgaon",
+      "Noida",
+      "Hyderabad",
+      "Pune",
+      "Chennai",
+      "Mumbai",
+      "Delhi",
+      "Remote India"
+    ]
+  },
+  "roleFamilies": [
+    {
+      "id": "java_backend",
+      "label": "Java Backend",
+      "priority": 100,
+      "signals": {
+        "java": 10,
+        "spring": 10,
+        "backend": 8,
+        "rest_api": 4,
+        "microservices": 3,
+        "distributed_systems": 3,
+        "sql": 2
+      }
+    },
+    {
+      "id": "java_react_fullstack",
+      "label": "Java + React Full Stack",
+      "priority": 95,
+      "signals": {
+        "java_spring_backend": 20,
+        "react": 8,
+        "typescript_javascript": 6,
+        "fullstack_api": 6
+      }
+    },
+    {
+      "id": "node_backend",
+      "label": "Node.js Backend",
+      "priority": 85,
+      "signals": {
+        "node": 12,
+        "typescript": 10,
+        "javascript": 5,
+        "backend_api": 6,
+        "react": 5,
+        "sql": 2
+      }
+    },
+    {
+      "id": "node_react_fullstack",
+      "label": "Node.js + React Full Stack",
+      "priority": 85,
+      "signals": {
+        "node": 10,
+        "typescript": 8,
+        "javascript": 4,
+        "react": 8,
+        "fullstack_api": 8,
+        "sql": 2
+      }
+    }
+  ],
+  "primarySkills": [
+    {
+      "name": "Java",
+      "aliases": [
+        "java"
+      ],
+      "weight": 6.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "Spring / Spring Boot",
+      "aliases": [
+        "spring boot",
+        "spring framework",
+        "spring"
+      ],
+      "weight": 5.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "React",
+      "aliases": [
+        "react.js",
+        "reactjs",
+        "react"
+      ],
+      "weight": 4.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "Node.js",
+      "aliases": [
+        "node.js",
+        "nodejs",
+        "node js"
+      ],
+      "weight": 4.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "TypeScript",
+      "aliases": [
+        "typescript"
+      ],
+      "weight": 3.0,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "JavaScript",
+      "aliases": [
+        "javascript",
+        "ecmascript"
+      ],
+      "weight": 3.0,
+      "evidence": "demonstrated"
+    }
+  ],
+  "supportingSkills": [
+    {
+      "name": "SQL / PostgreSQL",
+      "aliases": [
+        "postgresql",
+        "postgres",
+        "sql"
+      ],
+      "weight": 2.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "AWS",
+      "aliases": [
+        "amazon web services",
+        "aws",
+        "ec2",
+        "s3",
+        "lambda"
+      ],
+      "weight": 3.0,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "Terraform",
+      "aliases": [
+        "terraform",
+        "infrastructure as code",
+        "iac"
+      ],
+      "weight": 1.5,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "Docker",
+      "aliases": [
+        "docker",
+        "containerization",
+        "containers"
+      ],
+      "weight": 2.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "CI/CD",
+      "aliases": [
+        "ci/cd",
+        "continuous integration",
+        "continuous delivery",
+        "circleci"
+      ],
+      "weight": 2.0,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "JUnit / Testing",
+      "aliases": [
+        "junit",
+        "unit testing",
+        "automated testing"
+      ],
+      "weight": 1.0,
+      "evidence": "resume_skill"
+    },
+    {
+      "name": "Observability",
+      "aliases": [
+        "opentelemetry",
+        "otel",
+        "grafana",
+        "prometheus",
+        "observability",
+        "monitoring"
+      ],
+      "weight": 1.5,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "Performance Engineering",
+      "aliases": [
+        "performance optimization",
+        "performance engineering",
+        "latency",
+        "performance regression"
+      ],
+      "weight": 1.0,
+      "evidence": "demonstrated"
+    },
+    {
+      "name": "Large-scale Product Engineering",
+      "aliases": [
+        "scalable",
+        "large scale",
+        "large-scale",
+        "millions of users",
+        "high scale"
+      ],
+      "weight": 1.0,
+      "evidence": "demonstrated"
+    }
+  ],
+  "hardExcludeTitlePatterns": [
+    "engineering manager",
+    "software engineering manager",
+    "director of engineering",
+    "principal engineer",
+    "principal software",
+    "staff software engineer",
+    "staff engineer",
+    "ios engineer",
+    "ios developer",
+    "android engineer",
+    "android developer",
+    "data scientist",
+    "machine learning engineer",
+    "ml engineer",
+    "research scientist",
+    "qa engineer",
+    "quality assurance",
+    "sdet",
+    "devops engineer",
+    "site reliability engineer"
+  ],
+  "scoring": {
+    "maxRoleScore": 40.0,
+    "maxExperienceScore": 20.0,
+    "maxPrimarySkillScore": 25.0,
+    "maxSupportingScore": 15.0,
+    "highPriorityScore": 80.0,
+    "goodCandidateScore": 65.0,
+    "lowPriorityMinScore": 35.0,
+    "nearDuplicateSimilarity": 0.9,
+    "relevantMinScore": 50.0
+  },
+  "resumeEvidence": {
+    "summary": [
+      "Software engineering experience across Adobe and Sopra Steria",
+      "Performance engineering, CI/CD, network/API latency and observability work",
+      "Large-scale product development at Adobe Express",
+      "AWS and Terraform infrastructure experience demonstrated in work history",
+      "JavaScript and TypeScript are supported by product work; React and Node.js are listed technical skills",
+      "Backend-oriented listed skills include Java, Spring, Spring Boot, JUnit and PostgreSQL"
+    ]
+  }
+}

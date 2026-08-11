@@ -1,0 +1,79 @@
+{% macro badge(status) -%}
+  {% set s = status or 'never_verified' %}
+  <span class="status status-{{ s }}">
+    <span class="status-dot" aria-hidden="true"></span>
+    {{ {
+      'healthy':'Healthy',
+      'healthy_with_fallback':'Fallback',
+      'suspicious':'Suspicious',
+      'failed':'Failed',
+      'disabled':'Disabled',
+      'never_verified':'Never verified',
+      'completed':'Completed',
+      'running':'Running',
+      'queued':'Queued',
+      'interrupted':'Interrupted'
+    }.get(s, s|replace('_',' ')|title) }}
+  </span>
+{%- endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Job Fetcher{% endblock %}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/">
+      <span class="brand-mark">JF</span>
+      <span><strong>Job Fetcher</strong><small>Operations console</small></span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/" class="{% if path == '/' %}active{% endif %}"><span>⌂</span> Dashboard</a>
+      <a href="/companies" class="{% if path.startswith('/companies') %}active{% endif %}"><span>▦</span> Companies</a>
+      <a href="/jobs" class="{% if path.startswith('/jobs') %}active{% endif %}"><span>⌕</span> Jobs</a>
+      <a href="/relevance" class="{% if path.startswith('/relevance') %}active{% endif %}"><span>◎</span> Relevant Jobs</a>
+      <a href="/health" class="{% if path.startswith('/health') %}active{% endif %}"><span>✓</span> Health</a>
+      <a href="/runs" class="{% if path.startswith('/runs') %}active{% endif %}"><span>↻</span> Runs</a>
+      <a href="/settings" class="{% if path.startswith('/settings') %}active{% endif %}"><span>⚙</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="muted">Local application</span>
+      <span class="muted">Data stays on this machine</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">{% block eyebrow %}Job Fetcher{% endblock %}</div>
+        <h1>{% block heading %}Dashboard{% endblock %}</h1>
+      </div>
+      <div class="topbar-actions">
+        {% if active_run %}
+          <a class="run-chip" href="/runs/{{ active_run['id'] }}">
+            <span class="pulse"></span>
+            <span>
+              <strong>{{ active_run['run_type']|title }} running</strong>
+              <small>{{ active_run['completed_companies'] }} / {{ active_run['total_companies'] }} companies</small>
+            </span>
+          </a>
+        {% else %}
+          <button class="btn btn-secondary" data-start-run="verify">Verify All</button>
+          <button class="btn btn-primary" data-start-run="fetch">Fetch All</button>
+        {% endif %}
+      </div>
+    </header>
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>window.JF_SOURCE_SCHEMA = {{ source_schema|tojson }};</script>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

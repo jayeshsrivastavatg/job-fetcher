@@ -1,0 +1,1319 @@
+companies:
+- id: uber
+  rank: 1
+  name: Uber
+  enabled: true
+  career_url: https://jobs.uber.com/
+  source:
+    type: auto
+    entry_url: https://jobs.uber.com/en/jobs/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: atlassian
+  rank: 2
+  name: Atlassian
+  enabled: true
+  career_url: https://www.atlassian.com/company/careers
+  source:
+    type: atlassian
+    entry_url: https://www.atlassian.com/company/careers/all-jobs
+    browser_max_pages: 20
+    browser_max_scrolls: 12
+    browser_stable_scrolls: 3
+  research:
+    status: verified
+    provider_hint: atlassian_public_dynamic
+    verified_at: '2026-08-11'
+    notes: Dedicated Atlassian source filters stable /company/careers/details/<id>
+      roles and uses bounded browser/XHR pagination when the all-jobs list is client-rendered.
+- id: google
+  rank: 3
+  name: Google
+  enabled: true
+  career_url: https://www.google.com/about/careers/applications/jobs/results
+  source:
+    type: auto
+    entry_url: https://www.google.com/about/careers/applications/jobs/results
+  research:
+    status: verified
+    provider_hint: proprietary
+    verified_at: '2026-08-11'
+- id: meta
+  rank: 4
+  name: Meta (Facebook)
+  enabled: true
+  career_url: https://www.metacareers.com/jobsearch/
+  source:
+    type: meta
+    entry_url: https://www.metacareers.com/jobsearch/
+    offices:
+    - Bangalore, India
+    - Gurgaon, India
+    - Hyderabad, India
+    - Mumbai, India
+    - Delhi, India
+    - New Delhi, India
+    max_pages: 40
+  research:
+    status: verified
+    provider_hint: meta_public_search
+    verified_at: '2026-08-11'
+- id: stripe
+  rank: 5
+  name: Stripe
+  enabled: true
+  career_url: https://stripe.com/in/careers
+  source:
+    type: greenhouse
+    board_token: stripe
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: rippling
+  rank: 6
+  name: Rippling
+  enabled: true
+  career_url: https://www.rippling.com/careers/open-roles
+  source:
+    type: auto
+    entry_url: https://www.rippling.com/careers/open-roles
+    browser_max_pages: 8
+    browser_max_scrolls: 18
+    browser_stable_scrolls: 3
+    browser_load_more_clicks: 20
+  research:
+    status: verified
+    provider_hint: rippling_public_dynamic
+    verified_at: '2026-08-11'
+    notes: Public open-roles page is readable to normal crawlers but can return 403
+      to raw HTTP. AutoSource now escalates 403/429 to bounded browser/XHR capture.
+- id: databricks
+  rank: 7
+  name: Databricks
+  enabled: true
+  career_url: https://www.databricks.com/company/careers/open-positions
+  source:
+    type: greenhouse
+    board_token: databricks
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: apple
+  rank: 8
+  name: Apple
+  enabled: true
+  career_url: https://jobs.apple.com/en-in/search?location=india-INDC
+  source:
+    type: apple
+    entry_url: https://jobs.apple.com/en-in/search?location=india-INDC
+    max_pages: 50
+  research:
+    status: verified
+    provider_hint: apple_public_search
+    verified_at: '2026-08-11'
+- id: microsoft
+  rank: 9
+  name: Microsoft
+  enabled: true
+  career_url: https://apply.careers.microsoft.com/careers?domain=microsoft.com&hl=en
+  source:
+    type: eightfold
+    entry_url: https://apply.careers.microsoft.com/careers?domain=microsoft.com&hl=en
+    canonical_base_url: https://apply.careers.microsoft.com
+    canonical_job_path_template: careerhub/explore/jobs/{id}?domain=microsoft.com&hl=en
+    locale: en-US
+    browser_max_scrolls: 80
+    browser_stable_scrolls: 5
+  research:
+    status: verified
+    provider_hint: eightfold_branded
+    verified_at: '2026-08-11'
+- id: amazon
+  rank: 10
+  name: Amazon
+  enabled: true
+  career_url: https://www.amazon.jobs/en/search?base_query=Software+Development&country=IND
+  source:
+    type: amazon
+    entry_url: https://www.amazon.jobs/en/search?base_query=Software+Development&country=IND
+    max_pages: 60
+  research:
+    status: verified
+    provider_hint: amazon_public_search
+    verified_at: '2026-08-11'
+- id: linkedin
+  rank: 11
+  name: LinkedIn
+  enabled: false
+  career_url: https://careers.linkedin.com/
+  source:
+    type: manual
+    reason: LinkedIn User Agreement prohibits automated scraping. Use an approved
+      LinkedIn crawling permission/partner feed if obtained.
+  research:
+    status: verified
+    provider_hint: manual_due_linkedin_terms
+    verified_at: '2026-08-11'
+    notes: Disabled by default. LinkedIn careers routes openings to LinkedIn Jobs;
+      automated scraping is prohibited without written permission. LinkedIn job APIs
+      are partner-authorized rather than a public read API.
+- id: phonepe
+  rank: 12
+  name: PhonePe
+  enabled: true
+  career_url: https://www.phonepe.com/careers/
+  source:
+    type: greenhouse
+    board_token: phonepe
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: intuit
+  rank: 13
+  name: Intuit
+  enabled: true
+  career_url: https://www.intuit.com/in/careers/
+  source:
+    type: auto
+    entry_url: https://jobs.intuit.com/location/india-jobs/27595/1269750/2
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: salesforce
+  rank: 14
+  name: Salesforce
+  enabled: true
+  career_url: https://www.salesforce.com/company/careers/locations/india/
+  source:
+    type: workday
+    host: salesforce.wd12.myworkdayjobs.com
+    tenant: salesforce
+    site: External_Career_Site
+    locale: en-US
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: snowflake
+  rank: 15
+  name: Snowflake
+  enabled: true
+  career_url: https://careers.snowflake.com/us/en/search-results
+  source:
+    type: phenom
+    entry_url: https://careers.snowflake.com/us/en/search-results
+    canonical_base_url: https://careers.snowflake.com
+    browser_max_pages: 30
+    browser_max_scrolls: 8
+    browser_stable_scrolls: 2
+  research:
+    status: verified
+    provider_hint: phenom
+    verified_at: '2026-08-11'
+    notes: Snowflake careers uses Phenom assets/client-rendered search. PhenomSource
+      prefers public structured data and otherwise captures XHR plus bounded Next
+      pagination.
+- id: twilio
+  rank: 16
+  name: Twilio
+  enabled: true
+  career_url: https://jobs.twilio.com/careers?domain=twilio.com&hl=en
+  source:
+    type: eightfold
+    entry_url: https://jobs.twilio.com/careers?domain=twilio.com&hl=en
+    provider_url: https://twilio.eightfold.ai/careers?domain=twilio.com&hl=en
+    tenant: twilio
+    canonical_base_url: https://jobs.twilio.com
+    locale: en-US
+    browser_max_scrolls: 60
+    browser_stable_scrolls: 5
+  research:
+    status: verified
+    provider_hint: eightfold
+    verified_at: '2026-08-11'
+- id: flipkart
+  rank: 17
+  name: Flipkart
+  enabled: false
+  career_url: https://www.flipkartcareers.com/jobslist
+  source:
+    type: manual
+    entry_url: https://www.flipkartcareers.com/jobslist
+    reason: Flipkart Careers Terms of Use prohibit robots/data-mining/automated extraction;
+      use a company-approved feed/API or manual import.
+  research:
+    status: verified_restricted
+    provider_hint: manual_due_site_terms
+    verified_at: '2026-08-11'
+- id: swiggy
+  rank: 18
+  name: Swiggy
+  enabled: true
+  career_url: https://careers.swiggy.com/
+  source:
+    type: auto
+    entry_url: https://careers.swiggy.com/list.html?dept=Engineering&loc=1
+    browser_max_pages: 20
+    browser_max_scrolls: 10
+    browser_stable_scrolls: 2
+    browser_load_more_clicks: 15
+  research:
+    status: verified
+    provider_hint: dynamic_xhr
+    verified_at: '2026-08-11'
+    notes: Static listing contains client templates; browser fallback captures public
+      JSON/XHR responses and paginates the rendered jobs list.
+- id: meesho
+  rank: 19
+  name: Meesho
+  enabled: true
+  career_url: https://www.meesho.io/jobs
+  source:
+    type: auto
+    entry_url: https://www.meesho.io/jobs?d=engineering
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: dream11
+  rank: 20
+  name: Dream11
+  enabled: true
+  career_url: https://dream11.hire.trakstar.com/
+  source:
+    type: trakstar
+    entry_url: https://dream11.hire.trakstar.com/
+  research:
+    status: verified
+    provider_hint: trakstar
+    notes: Current public Dream11 Inc. vacancies board is hosted on Trakstar Hire;
+      use stable /jobs/<id>/ links.
+    verified_at: '2026-08-11'
+- id: zomato_blinkit
+  rank: 21
+  name: Zomato / Blinkit
+  enabled: true
+  career_url: https://eternal.com/careers
+  source:
+    type: auto
+    entry_url: https://eternal.com/careers
+  research:
+    status: verified
+    provider_hint: auto
+    notes: Zomato/Blinkit recruiting is represented through parent Eternal careers.
+    verified_at: '2026-08-11'
+- id: cred
+  rank: 22
+  name: CRED
+  enabled: true
+  career_url: https://careers.cred.club/openings
+  source:
+    type: lever
+    site: cred
+  research:
+    status: verified
+    provider_hint: lever
+    verified_at: '2026-08-11'
+    notes: Official CRED openings are currently backed by the public Lever board jobs.lever.co/cred.
+- id: walmart_global_tech
+  rank: 23
+  name: Walmart Global Tech
+  enabled: true
+  career_url: https://tech.walmart.com/content/walmart-global-tech/en_us/careers.html
+  source:
+    type: workday
+    host: walmart.wd504.myworkdayjobs.com
+    tenant: walmart
+    site: WalmartExternal
+    locale: en-US
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: oracle_oci
+  rank: 24
+  name: Oracle Cloud (OCI)
+  enabled: true
+  career_url: https://www.oracle.com/in/careers/opportunities/oracle-cloud-infrastructure/
+  source:
+    type: oracle
+    mode: public_search
+    entry_url: https://careers.oracle.com/en/sites/jobsearch/jobs?lastSelectedFacet=locations&selectedFlexFieldsFacets=%22AttributeChar13%7CProfessional%7C%7CAttributeChar15%7COCI%22&selectedLocationsFacet=300000000106947
+    host: careers.oracle.com
+    site_number: jobsearch
+    locale: en
+    max_pages: 30
+  research:
+    status: verified
+    provider_hint: oracle_public_candidate_experience
+    verified_at: '2026-08-11'
+    notes: OCI India jobs routed through Oracle public Candidate Experience search
+      with OCI + India filters.
+- id: adobe
+  rank: 25
+  name: Adobe
+  enabled: true
+  career_url: https://careers.adobe.com/
+  source:
+    type: workday
+    host: adobe.wd5.myworkdayjobs.com
+    tenant: adobe
+    site: external_experienced
+    locale: en-US
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: postman
+  rank: 26
+  name: Postman
+  enabled: true
+  career_url: https://www.postman.com/company/careers/open-positions/
+  source:
+    type: auto
+    entry_url: https://www.postman.com/company/careers/open-positions/
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: razorpay
+  rank: 27
+  name: Razorpay
+  enabled: true
+  career_url: https://razorpay.com/careers/
+  source:
+    type: auto
+    entry_url: https://razorpay.com/careers/
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: paypal
+  rank: 28
+  name: PayPal
+  enabled: true
+  career_url: https://careers.pypl.com/locations/india/
+  source:
+    type: workday
+    host: paypal.wd1.myworkdayjobs.com
+    tenant: paypal
+    site: jobs
+    locale: en-US
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: goldman_sachs
+  rank: 29
+  name: Goldman Sachs (Tech)
+  enabled: true
+  career_url: https://higher.gs.com/results
+  source:
+    type: goldman
+    entry_url: https://higher.gs.com/results
+    browser_max_pages: 40
+    browser_max_scrolls: 8
+    browser_stable_scrolls: 2
+  research:
+    status: verified
+    provider_hint: higher.gs.com
+    verified_at: '2026-08-11'
+    notes: Dedicated GoldmanSource keeps stable https://higher.gs.com/roles/<id> URLs
+      and uses bounded browser/XHR pagination for the dynamic results page.
+- id: morgan_stanley
+  rank: 30
+  name: Morgan Stanley (Tech)
+  enabled: true
+  career_url: https://www.morganstanley.com/careers/career-opportunities-search
+  source:
+    type: eightfold
+    entry_url: https://morganstanley.eightfold.ai/careers?domain=morganstanley.com&hl=en
+    provider_url: https://morganstanley.eightfold.ai/careers?domain=morganstanley.com&hl=en
+    tenant: morganstanley
+    canonical_base_url: https://morganstanley.eightfold.ai
+    locale: en-US
+    browser_max_scrolls: 60
+    browser_stable_scrolls: 5
+  research:
+    status: verified
+    provider_hint: eightfold
+    verified_at: '2026-08-11'
+- id: gojek
+  rank: 31
+  name: GoTo (Gojek)
+  enabled: true
+  career_url: https://www.gojek.io/careers
+  source:
+    type: auto
+    entry_url: https://www.gojek.io/careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: media_net
+  rank: 32
+  name: Media.net
+  enabled: true
+  career_url: https://careers.media.net/
+  source:
+    type: auto
+    entry_url: https://careers.media.net/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: zeta
+  rank: 33
+  name: Zeta
+  enabled: true
+  career_url: https://www.zeta.tech/in/careers/work-with-us
+  source:
+    type: auto
+    entry_url: https://www.zeta.tech/in/careers/work-with-us
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: freshworks
+  rank: 34
+  name: Freshworks
+  enabled: true
+  career_url: https://careers.smartrecruiters.com/freshworks
+  source:
+    type: auto
+    entry_url: https://careers.smartrecruiters.com/freshworks
+  research:
+    status: verified
+    provider_hint: smartrecruiters
+    verified_at: '2026-08-11'
+- id: servicenow
+  rank: 35
+  name: ServiceNow
+  enabled: true
+  career_url: https://careers.servicenow.com/jobs/
+  source:
+    type: smartrecruiters
+    company_identifier: ServiceNow
+  research:
+    status: verified
+    provider_hint: smartrecruiters
+    verified_at: '2026-08-11'
+- id: cisco
+  rank: 36
+  name: Cisco
+  enabled: true
+  career_url: https://careers.cisco.com/global/en/search-results
+  source:
+    type: auto
+    entry_url: https://careers.cisco.com/global/en/search-results
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: broadcom_vmware
+  rank: 37
+  name: VMware / Broadcom
+  enabled: true
+  career_url: https://broadcom.wd1.myworkdayjobs.com/External_Career
+  source:
+    type: auto
+    entry_url: https://broadcom.wd1.myworkdayjobs.com/External_Career
+  research:
+    status: verified
+    provider_hint: workday
+    notes: VMware opportunities are now represented through Broadcom career infrastructure.
+    verified_at: '2026-08-11'
+- id: nutanix
+  rank: 38
+  name: Nutanix
+  enabled: true
+  career_url: https://careers.nutanix.com/en/
+  source:
+    type: auto
+    entry_url: https://careers.nutanix.com/en/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: arista_networks
+  rank: 39
+  name: Arista Networks
+  enabled: true
+  career_url: https://careers.smartrecruiters.com/AristaNetworks/
+  source:
+    type: auto
+    entry_url: https://careers.smartrecruiters.com/AristaNetworks/
+  research:
+    status: verified
+    provider_hint: smartrecruiters
+    verified_at: '2026-08-11'
+- id: qualtrics
+  rank: 40
+  name: Qualtrics
+  enabled: true
+  career_url: https://www.qualtrics.com/careers/us/en
+  source:
+    type: auto
+    entry_url: https://www.qualtrics.com/careers/us/en
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: mongodb
+  rank: 41
+  name: MongoDB
+  enabled: true
+  career_url: https://www.mongodb.com/company/careers
+  source:
+    type: greenhouse
+    board_token: mongodb
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: confluent
+  rank: 42
+  name: Confluent
+  enabled: true
+  career_url: https://careers.confluent.io/jobs
+  source:
+    type: auto
+    entry_url: https://careers.confluent.io/jobs
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: rubrik
+  rank: 43
+  name: Rubrik
+  enabled: true
+  career_url: https://www.rubrik.com/company/careers
+  source:
+    type: greenhouse
+    board_token: rubrik
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: cohesity
+  rank: 44
+  name: Cohesity
+  enabled: true
+  career_url: https://www.cohesity.com/careers/open-positions/
+  source:
+    type: workday
+    host: cohesity.wd5.myworkdayjobs.com
+    tenant: cohesity
+    site: Cohesity_Careers
+    locale: en-US
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: inmobi
+  rank: 45
+  name: InMobi
+  enabled: true
+  career_url: https://www.inmobi.com/company/careers
+  source:
+    type: auto
+    entry_url: https://www.inmobi.com/company/careers
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: groww
+  rank: 46
+  name: Groww
+  enabled: true
+  career_url: https://groww.in/careers
+  source:
+    type: greenhouse
+    board_token: groww
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: zerodha
+  rank: 47
+  name: Zerodha
+  enabled: true
+  career_url: https://careers.zerodha.com/
+  source:
+    type: auto
+    entry_url: https://careers.zerodha.com/
+    allow_zero_jobs: true
+  research:
+    status: verified
+    provider_hint: proprietary
+    notes: Official careers page currently reports no job openings; zero jobs is treated
+      as a healthy result, not a scraper failure.
+    verified_at: '2026-08-11'
+- id: urban_company
+  rank: 48
+  name: Urban Company
+  enabled: true
+  career_url: https://careers.urbancompany.com/jobs
+  source:
+    type: auto
+    entry_url: https://careers.urbancompany.com/jobs
+    browser_max_pages: 20
+    browser_max_scrolls: 10
+    browser_stable_scrolls: 2
+    browser_load_more_clicks: 15
+  research:
+    status: verified
+    provider_hint: dynamic_xhr
+    verified_at: '2026-08-11'
+    notes: Public jobs board is JS-rendered with stable jobDetail?id=<uuid> pages.
+      Browser fallback captures public XHR/JSON and rendered links.
+- id: cars24
+  rank: 49
+  name: Cars24
+  enabled: true
+  career_url: https://www.cars24.com/careers/
+  source:
+    type: auto
+    entry_url: https://www.cars24.com/careers/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: nykaa
+  rank: 50
+  name: Nykaa
+  enabled: true
+  career_url: https://careers.nykaa.com/
+  source:
+    type: auto
+    entry_url: https://careers.nykaa.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: makemytrip
+  rank: 51
+  name: MakeMyTrip
+  enabled: true
+  career_url: https://careers.makemytrip.com/
+  source:
+    type: auto
+    entry_url: https://careers.makemytrip.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: oyo
+  rank: 52
+  name: OYO
+  enabled: false
+  career_url: https://www.oyorooms.com/about/
+  source:
+    type: auto
+    entry_url: https://www.oyorooms.com/about/
+  research:
+    status: landing_only
+    provider_hint: unresolved
+    notes: Official OYO site currently routes Teams / Careers to LinkedIn; no public
+      first-party jobs portal verified on 2026-08-11. Disabled by default.
+    verified_at: '2026-08-11'
+- id: porter
+  rank: 53
+  name: Porter
+  enabled: true
+  career_url: https://porter.in/careers
+  source:
+    type: auto
+    entry_url: https://porter.in/careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: delhivery
+  rank: 54
+  name: Delhivery
+  enabled: true
+  career_url: https://www.delhivery.com/careers
+  source:
+    type: auto
+    entry_url: https://www.delhivery.com/careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: slice
+  rank: 55
+  name: Slice
+  enabled: true
+  career_url: https://slice.bank.in/careers/open-positions
+  source:
+    type: auto
+    entry_url: https://slice.bank.in/careers/open-positions
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: bharatpe
+  rank: 56
+  name: BharatPe
+  enabled: true
+  career_url: https://bharatpe.com/career/
+  source:
+    type: auto
+    entry_url: https://bharatpe.com/career/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: pine_labs
+  rank: 57
+  name: Pine Labs
+  enabled: true
+  career_url: https://www.pinelabs.com/careers/open-jobs
+  source:
+    type: auto
+    entry_url: https://www.pinelabs.com/careers/open-jobs
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: navi
+  rank: 58
+  name: Navi
+  enabled: true
+  career_url: https://navi.com/careers/jobs
+  source:
+    type: auto
+    entry_url: https://navi.com/careers/jobs
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: target_india
+  rank: 59
+  name: Target India
+  enabled: true
+  career_url: https://corporate.target.com/careers
+  source:
+    type: auto
+    entry_url: https://corporate.target.com/careers
+  research:
+    status: verified
+    provider_hint: workday-link
+    verified_at: '2026-08-11'
+- id: lowes_india
+  rank: 60
+  name: Lowe's India
+  enabled: true
+  career_url: https://talent.lowes.com/in/en/
+  source:
+    type: auto
+    entry_url: https://talent.lowes.com/in/en/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: home_depot_tech
+  rank: 61
+  name: Home Depot Tech
+  enabled: true
+  career_url: https://careers.homedepot.com/job-search-results/
+  source:
+    type: auto
+    entry_url: https://careers.homedepot.com/job-search-results/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: tesco_india
+  rank: 62
+  name: Tesco India
+  enabled: true
+  career_url: https://www.tescobengaluru.com/careers/
+  source:
+    type: auto
+    entry_url: https://www.tescobengaluru.com/careers/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: jpmorgan_chase
+  rank: 63
+  name: JPMorgan Chase (Tech)
+  enabled: true
+  career_url: https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs
+  source:
+    type: oracle
+    entry_url: https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs
+    host: jpmc.fa.oraclecloud.com
+    site_number: CX_1001
+    locale: en
+  research:
+    status: verified
+    provider_hint: oracle
+    verified_at: '2026-08-11'
+- id: wells_fargo
+  rank: 64
+  name: Wells Fargo (Tech)
+  enabled: true
+  career_url: https://www.wellsfargojobs.com/en/jobs/
+  source:
+    type: auto
+    entry_url: https://www.wellsfargojobs.com/en/jobs/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: barclays
+  rank: 65
+  name: Barclays (Tech)
+  enabled: true
+  career_url: https://search.jobs.barclays/
+  source:
+    type: auto
+    entry_url: https://search.jobs.barclays/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: citi
+  rank: 66
+  name: Citicorp (Citi Tech)
+  enabled: true
+  career_url: https://jobs.citi.com/location/india-jobs/287/1269750/2
+  source:
+    type: auto
+    entry_url: https://jobs.citi.com/location/india-jobs/287/1269750/2
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: american_express
+  rank: 67
+  name: American Express
+  enabled: true
+  career_url: https://careers.americanexpress.com/
+  source:
+    type: auto
+    entry_url: https://careers.americanexpress.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: mastercard
+  rank: 68
+  name: Mastercard
+  enabled: true
+  career_url: https://careers.mastercard.com/us/en/search-results
+  source:
+    type: auto
+    entry_url: https://careers.mastercard.com/us/en/search-results
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: visa
+  rank: 69
+  name: Visa
+  enabled: true
+  career_url: https://visa.wd5.myworkdayjobs.com/Visa
+  source:
+    type: auto
+    entry_url: https://visa.wd5.myworkdayjobs.com/Visa
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: fidelity
+  rank: 70
+  name: Fidelity Investments
+  enabled: true
+  career_url: https://jobs.fidelity.com/in/jobs/
+  source:
+    type: auto
+    entry_url: https://jobs.fidelity.com/in/jobs/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: rakuten_india
+  rank: 71
+  name: Rakuten India
+  enabled: true
+  career_url: https://rakuten.openings.co/rakuten/
+  source:
+    type: auto
+    entry_url: https://rakuten.openings.co/rakuten/
+  research:
+    status: verified
+    provider_hint: openings.co
+    verified_at: '2026-08-11'
+- id: sony_tech_india
+  rank: 72
+  name: Sony Tech India
+  enabled: true
+  career_url: https://careers.sonyindiasoftware.co.in/sonyindiasoftware/
+  source:
+    type: auto
+    entry_url: https://careers.sonyindiasoftware.co.in/sonyindiasoftware/
+  research:
+    status: verified
+    provider_hint: zwayam
+    verified_at: '2026-08-11'
+- id: ibm_software_labs
+  rank: 73
+  name: IBM Software Labs
+  enabled: true
+  career_url: https://www.ibm.com/careers/search
+  source:
+    type: avature
+    entry_url: https://www.ibm.com/in-en/careers/search
+    canonical_base_url: https://careers.ibm.com
+    locale: en_US
+  research:
+    status: verified
+    provider_hint: avature
+    verified_at: '2026-08-11'
+    notes: IBM public job details are served under careers.ibm.com/careers/JobDetail;
+      adapter uses public HTML/embedded data then bounded browser/XHR fallback.
+- id: hpe
+  rank: 74
+  name: HPE (HP Enterprise)
+  enabled: true
+  career_url: https://careers.hpe.com/us/en/locations-india
+  source:
+    type: auto
+    entry_url: https://careers.hpe.com/us/en/locations-india
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: dell
+  rank: 75
+  name: Dell Technologies
+  enabled: true
+  career_url: https://jobs.dell.com/en/search-jobs
+  source:
+    type: auto
+    entry_url: https://jobs.dell.com/en/search-jobs
+  research:
+    status: verified
+    provider_hint: oracle-link
+    verified_at: '2026-08-11'
+- id: siemens_healthineers
+  rank: 76
+  name: Siemens Healthineers
+  enabled: true
+  career_url: https://jobs.siemens-healthineers.com/
+  source:
+    type: auto
+    entry_url: https://jobs.siemens-healthineers.com/
+  research:
+    status: verified
+    provider_hint: workday-link
+    verified_at: '2026-08-11'
+- id: sprinklr
+  rank: 77
+  name: Sprinklr
+  enabled: true
+  career_url: https://www.sprinklr.com/careers/
+  source:
+    type: auto
+    entry_url: https://www.sprinklr.com/careers/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: browserstack
+  rank: 78
+  name: BrowserStack
+  enabled: true
+  career_url: https://browserstack.wd3.myworkdayjobs.com/External
+  source:
+    type: auto
+    entry_url: https://browserstack.wd3.myworkdayjobs.com/External
+  research:
+    status: verified
+    provider_hint: workday
+    verified_at: '2026-08-11'
+- id: thoughtworks
+  rank: 79
+  name: Thoughtworks
+  enabled: true
+  career_url: https://www.thoughtworks.com/en-in/careers/jobs
+  source:
+    type: auto
+    entry_url: https://www.thoughtworks.com/en-in/careers/jobs
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: epam
+  rank: 80
+  name: EPAM Systems (Product)
+  enabled: true
+  career_url: https://careers.epam.com/en/jobs/india
+  source:
+    type: auto
+    entry_url: https://careers.epam.com/en/jobs/india
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: payu
+  rank: 81
+  name: PayU
+  enabled: true
+  career_url: https://careers.payu.in/PayU/go/_/514880/
+  source:
+    type: successfactors
+    entry_url: https://careers.payu.in/PayU/go/_/514880/
+    max_pages: 30
+    max_jobs: 5000
+  research:
+    status: verified
+    provider_hint: successfactors/jobs2web
+    verified_at: '2026-08-11'
+- id: cashfree
+  rank: 82
+  name: Cashfree Payments
+  enabled: true
+  career_url: https://careers.kula.ai/cashfree
+  source:
+    type: kula
+    entry_url: https://careers.kula.ai/cashfree
+    tenant: cashfree
+    max_jobs: 5000
+  research:
+    status: verified
+    provider_hint: kula
+    verified_at: '2026-08-11'
+- id: games24x7
+  rank: 83
+  name: Games24x7
+  enabled: true
+  career_url: https://www.games24x7.com/life
+  source:
+    type: auto
+    entry_url: https://www.games24x7.com/life
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: winzo
+  rank: 84
+  name: WinZO
+  enabled: true
+  career_url: https://www.winzogames.com/careers/jobs/openings
+  source:
+    type: auto
+    entry_url: https://www.winzogames.com/careers/jobs/openings
+  research:
+    status: verified
+    provider_hint: proprietary
+    verified_at: '2026-08-11'
+- id: mpl
+  rank: 85
+  name: MPL (Mobile Premier League)
+  enabled: false
+  career_url: https://www.mpl.live/
+  source:
+    type: auto
+    entry_url: https://www.mpl.live/
+  research:
+    status: landing_only
+    provider_hint: unresolved
+    notes: No public first-party MPL careers/jobs portal verified on 2026-08-11. Disabled
+      by default.
+    verified_at: '2026-08-11'
+- id: shiprocket
+  rank: 86
+  name: Shiprocket
+  enabled: true
+  career_url: https://careers.shiprocket.in/
+  source:
+    type: auto
+    entry_url: https://careers.shiprocket.in/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: elastic
+  rank: 87
+  name: Elastic
+  enabled: true
+  career_url: https://jobs.elastic.co/jobs/country/india
+  source:
+    type: auto
+    entry_url: https://jobs.elastic.co/jobs/country/india
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: akamai
+  rank: 88
+  name: Akamai Technologies
+  enabled: true
+  career_url: https://jobs.akamai.com/en/sites/CX_1/jobs
+  source:
+    type: oracle
+    entry_url: https://jobs.akamai.com/en/sites/CX_1/jobs
+    host: jobs.akamai.com
+    site_number: CX_1
+    locale: en
+  research:
+    status: verified
+    provider_hint: oracle
+    verified_at: '2026-08-11'
+- id: dynatrace
+  rank: 89
+  name: Dynatrace
+  enabled: true
+  career_url: https://www.dynatrace.com/careers/jobs/
+  source:
+    type: auto
+    entry_url: https://www.dynatrace.com/careers/jobs/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: druva
+  rank: 90
+  name: Druva
+  enabled: true
+  career_url: https://www.druva.com/why-druva/explore/careers
+  source:
+    type: auto
+    entry_url: https://www.druva.com/why-druva/explore/careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: hackerrank
+  rank: 91
+  name: HackerRank
+  enabled: true
+  career_url: https://www.hackerrank.com/careers/home
+  source:
+    type: auto
+    entry_url: https://www.hackerrank.com/careers/home
+  research:
+    status: verified
+    provider_hint: greenhouse
+    verified_at: '2026-08-11'
+- id: scaler
+  rank: 92
+  name: Scaler / InterviewBit
+  enabled: true
+  career_url: https://www.scaler.com/careers/
+  source:
+    type: auto
+    entry_url: https://www.scaler.com/careers/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: clevertap
+  rank: 93
+  name: CleverTap
+  enabled: true
+  career_url: https://clevertap.com/current-openings/
+  source:
+    type: kula
+    entry_url: https://careers.kula.ai/clevertap
+    tenant: clevertap
+    max_jobs: 5000
+  research:
+    status: verified
+    provider_hint: kula
+    verified_at: '2026-08-11'
+- id: chargebee
+  rank: 94
+  name: Chargebee
+  enabled: true
+  career_url: https://jobs.chargebee.com/
+  source:
+    type: auto
+    entry_url: https://jobs.chargebee.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: mindtickle
+  rank: 95
+  name: Mindtickle
+  enabled: true
+  career_url: https://jobs.lever.co/mindtickle
+  source:
+    type: auto
+    entry_url: https://jobs.lever.co/mindtickle
+  research:
+    status: verified
+    provider_hint: lever
+    verified_at: '2026-08-11'
+- id: yellow_ai
+  rank: 96
+  name: Yellow.ai
+  enabled: true
+  career_url: https://careers.yellow.ai/jobs/Careers
+  source:
+    type: auto
+    entry_url: https://careers.yellow.ai/jobs/Careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: gupshup
+  rank: 97
+  name: Gupshup
+  enabled: true
+  career_url: https://www.gupshup.ai/careers
+  source:
+    type: auto
+    entry_url: https://www.gupshup.ai/careers
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: nagarro
+  rank: 98
+  name: Nagarro (Product Unit)
+  enabled: true
+  career_url: https://www.nagarro.com/en/careers/india
+  source:
+    type: auto
+    entry_url: https://www.nagarro.com/en/careers/india
+  research:
+    status: verified
+    provider_hint: smartrecruiters-link
+    verified_at: '2026-08-11'
+- id: publicis_sapient_engine
+  rank: 99
+  name: Publicis Sapient (Engine)
+  enabled: true
+  career_url: https://careers.publicissapient.com/
+  source:
+    type: auto
+    entry_url: https://careers.publicissapient.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'
+- id: publicis_sapient_digital
+  rank: 100
+  name: Publicis Sapient (Digital)
+  enabled: true
+  career_url: https://careers.publicissapient.com/
+  source:
+    type: auto
+    entry_url: https://careers.publicissapient.com/
+  research:
+    status: verified
+    provider_hint: auto
+    verified_at: '2026-08-11'

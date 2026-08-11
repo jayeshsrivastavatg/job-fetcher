@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Settings · Job Fetcher{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block eyebrow %}Runtime defaults{% endblock %}
+{% block content %}
+<section class="settings-shell">
+<form id="settings-form" class="stack-form">
+  <section class="panel settings-section"><div class="panel-header"><div><h2>Fetching</h2><p>Network concurrency and retry behavior.</p></div></div><div class="form-grid three"><label><span>Default worker count</span><input type="number" min="1" max="32" name="fetch_workers" value="{{ settings.fetch_workers }}"></label><label><span>HTTP timeout (seconds)</span><input type="number" min="1" max="180" step="1" name="http_timeout" value="{{ settings.http_timeout }}"></label><label><span>Retries</span><input type="number" min="0" max="10" name="retries" value="{{ settings.retries }}"></label></div></section>
+  <section class="panel settings-section"><div class="panel-header"><div><h2>Browser</h2><p>Playwright fallback for dynamic career sites.</p></div></div><div class="form-grid two"><label class="check-label boxed"><input type="checkbox" name="browser_fallback" {% if settings.browser_fallback %}checked{% endif %}><span><strong>Browser fallback</strong><small>Allow Playwright when static/provider extraction is insufficient.</small></span></label><label><span>Maximum browser workers</span><input type="number" min="1" max="8" name="browser_workers" value="{{ settings.browser_workers }}"></label></div></section>
+  <section class="panel settings-section"><div class="panel-header"><div><h2>Verification</h2><p>Thresholds used to detect silent scraper degradation.</p></div></div><div class="form-grid three"><label><span>Large job-drop threshold</span><div class="input-suffix"><input type="number" min="5" max="99" step="1" name="verification_drop_threshold_pct" value="{{ (settings.verification_drop_threshold*100)|round|int }}"><span>%</span></div></label><label class="check-label boxed"><input type="checkbox" name="verify_sample_detail" {% if settings.verify_sample_detail %}checked{% endif %}><span><strong>Verify sample job URL</strong><small>Open one extracted detail URL per company.</small></span></label><label><span>Detail check timeout (seconds)</span><input type="number" min="1" max="120" name="detail_timeout" value="{{ settings.detail_timeout }}"></label></div></section>
+  <div class="settings-actions"><div class="form-error" data-form-error></div><button class="btn btn-primary" type="submit">Save Settings</button></div>
+</form>
+</section>
+{% endblock %}

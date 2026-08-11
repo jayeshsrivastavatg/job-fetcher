@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id }} · Job Fetcher{% endblock %}
+{% block heading %}{{ run.run_type|title }} Run #{{ run.id }}{% endblock %}
+{% block eyebrow %}<a class="breadcrumb" href="/runs?kind={{ run.run_type }}">Runs</a> / {{ run.id }}{% endblock %}
+{% block content %}
+{% if run.status in ['queued','running'] %}<div class="live-banner"><span class="pulse"></span><div><strong>{{ run.run_type|title }} is running</strong><span>{{ run.completed_companies }} of {{ run.total_companies }} companies complete. This page updates automatically.</span></div></div>{% endif %}
+<section class="run-overview panel">
+  <div class="run-topline"><div>{{ badge(run.status) }} <span class="muted">{{ run.scope|title }} scope</span></div><div><time class="local-time" datetime="{{ run.started_at or run.created_at }}"></time></div></div>
+  <div class="progress-track"><div class="progress-fill" style="width: {{ ((run.completed_companies / run.total_companies * 100) if run.total_companies else 0)|round(1) }}%"></div></div>
+  <div class="metric-grid run-metrics">
+    <div><span>Completed</span><strong>{{ run.completed_companies }} / {{ run.total_companies }}</strong></div>
+    <div><span>Healthy</span><strong>{{ run.healthy }}</strong></div>
+    <div><span>Fallback</span><strong>{{ run.fallback }}</strong></div>
+    <div><span>Suspicious</span><strong>{{ run.suspicious }}</strong></div>
+    <div><span>Failed</span><strong>{{ run.failed }}</strong></div>
+    <div><span>Jobs found</span><strong>{{ "{:,}".format(run.jobs_found) }}</strong></div>
+    {% if run.run_type=='fetch' %}<div><span>New jobs</span><strong>{{ run.jobs_new }}</strong></div><div><span>Updated jobs</span><strong>{{ run.jobs_updated }}</strong></div>{% endif %}
+  </div>
+  {% if run.error %}<div class="run-error"><strong>Run error</strong><code>{{ run.error }}</code></div>{% endif %}
+</section>
+<section class="panel table-panel"><div class="panel-header"><div><h2>Company results</h2><p>Results appear here as each company completes.</p></div></div>
+{% if run.results %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Company</th><th>Status</th><th>Adapter</th><th class="num">Jobs</th>{% if run.run_type=='fetch' %}<th class="num">New</th>{% else %}<th class="num">Previous</th><th>Change</th>{% endif %}<th>Browser</th><th>Failure</th><th>Duration</th></tr></thead><tbody>
+{% for r in run.results %}<tr><td><a class="strong-link" href="/companies/{{ r.company_id }}">{{ r.company_name }}</a></td><td>{{ badge(r.status) }}</td><td><code class="source-code">{{ r.adapter or r.configured_source or '—' }}</code></td><td class="num">{{ r.jobs_found }}</td>{% if run.run_type=='fetch' %}<td class="num">{{ r.new_jobs }}</td>{% else %}<td class="num">{{ r.previous_jobs_found if r.previous_jobs_found is not none else '—' }}</td><td>{% if r.count_change_pct is not none %}{{ r.count_change_pct }}%{% else %}—{% endif %}</td>{% endif %}<td>{{ 'Yes' if r.browser_used else 'No' }}</td><td class="truncate">{{ r.failure_category or '—' }}</td><td>{{ ('%.1fs'|format(r.duration_seconds)) if r.duration_seconds is not none else '—' }}</td></tr>
+{% if r.error %}<tr class="detail-row"><td colspan="10"><div class="inline-diagnostic"><strong>{{ r.failure_category or 'Error' }}</strong><span>{{ r.error }}</span></div></td></tr>{% endif %}
+{% endfor %}</tbody></table></div>{% else %}<div class="empty-state small"><span>{% if run.status in ['queued','running'] %}Waiting for the first company to complete…{% else %}No company results were recorded.{% endif %}</span></div>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% if run.status in ['queued','running'] %}<script>setTimeout(() => location.reload(), 1500);</script>{% endif %}{% endblock %}

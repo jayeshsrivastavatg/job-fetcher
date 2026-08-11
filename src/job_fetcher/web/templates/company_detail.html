@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ company.name }} · Job Fetcher{% endblock %}
+{% block heading %}{{ company.name }}{% endblock %}
+{% block eyebrow %}<a class="breadcrumb" href="/companies">Companies</a> / {{ company.id }}{% endblock %}
+{% block content %}
+<section class="entity-header">
+  <div class="entity-statuses">
+    {% if company.enabled %}<span class="status status-healthy"><span class="status-dot"></span>Enabled</span>{% else %}{{ badge('disabled') }}{% endif %}
+    {% if latest_health %}{{ badge(latest_health.status) }}{% else %}{{ badge('never_verified') }}{% endif %}
+  </div>
+  <div class="button-row">
+    {% if company.enabled %}
+      <button class="btn btn-secondary" data-company-run="verify" data-company-id="{{ company.id }}">Verify {{ company.name }}</button>
+      <button class="btn btn-primary" data-company-run="fetch" data-company-id="{{ company.id }}">Fetch {{ company.name }}</button>
+      <button class="btn btn-ghost" data-open-dialog="edit-company-dialog">Edit</button>
+      <button class="btn btn-danger-ghost" data-confirm-disable data-company-id="{{ company.id }}" data-company-name="{{ company.name }}">Disable</button>
+    {% else %}
+      <button class="btn btn-primary" data-set-enabled="true" data-company-id="{{ company.id }}">Enable</button>
+      <button class="btn btn-ghost" data-open-dialog="edit-company-dialog">Edit</button>
+    {% endif %}
+  </div>
+</section>
+
+<div class="two-col detail-cols">
+  <section class="panel">
+    <div class="panel-header"><div><h2>Configuration</h2><p>Source and career-site configuration.</p></div></div>
+    <dl class="kv-list">
+      <div><dt>Career URL</dt><dd><a href="{{ company.career_url }}" target="_blank" rel="noopener">{{ company.career_url }}</a></dd></div>
+      <div><dt>Configured source</dt><dd><code>{{ company.source.type }}</code></dd></div>
+      <div><dt>Resolved adapter</dt><dd>{% if latest_health %}<code>{{ latest_health.adapter }}</code>{% elif latest_fetch %}<code>{{ latest_fetch.adapter }}</code>{% else %}<span class="muted">Not run yet</span>{% endif %}</dd></div>
+      <div><dt>Rank</dt><dd>{{ company.rank or '—' }}</dd></div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header"><div><h2>Health summary</h2><p>Latest verification signal.</p></div></div>
+    <div class="metric-grid">
+      <div><span>Jobs found</span><strong>{{ latest_health.jobs_found if latest_health else active_jobs }}</strong></div>
+      <div><span>Previous count</span><strong>{{ latest_health.previous_jobs_found if latest_health and latest_health.previous_jobs_found is not none else '—' }}</strong></div>
+      <div><span>Change</span><strong>{% if latest_health and latest_health.count_change_pct is not none %}{{ latest_health.count_change_pct }}%{% else %}—{% endif %}</strong></div>
+      <div><span>Browser used</span><strong>{% if latest_health %}{{ 'Yes' if latest_health.browser_used else 'No' }}{% else %}—{% endif %}</strong></div>
+      <div><span>Last verified</span><strong class="small-strong">{% if latest_health %}<time class="local-time" datetime="{{ latest_health.run_created_at }}"></time>{% else %}—{% endif %}</strong></div>
+      <div><span>Duration</span><strong>{{ ('%.1fs'|format(latest_health.duration_seconds)) if latest_health and latest_health.duration_seconds is not none else '—' }}</strong></div>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <details class="diagnostics" {% if latest_health and latest_health.status in ['failed','suspicious'] %}open{% endif %}>
+    <summary><div><h2>Diagnostics</h2><p>Technical details from the latest verification.</p></div><span>Show details</span></summary>
+    {% if latest_health %}
+    <dl class="kv-list diagnostics-grid">
+      <div><dt>Failure category</dt><dd>{{ latest_health.failure_category or '—' }}</dd></div>
+      <div><dt>Quality ratio</dt><dd>{{ ('%.0f%%'|format((latest_health.quality_ratio or 0)*100)) if latest_health.quality_ratio is not none else '—' }}</dd></div>
+      <div><dt>Sample detail</dt><dd>{{ 'Passed' if latest_health.payload.get('sample_detail_reachable') else (latest_health.payload.get('sample_detail_error') or 'Not checked') }}</dd></div>
+      <div><dt>HTTP sample status</dt><dd>{{ latest_health.payload.get('sample_detail_status_code') or '—' }}</dd></div>
+      <div class="wide"><dt>Discovered XHR endpoints</dt><dd>{% set eps=latest_health.payload.get('discovered_endpoints',[]) %}{% if eps %}<ul class="plain-list">{% for e in eps %}<li><code>{{ e }}</code></li>{% endfor %}</ul>{% else %}—{% endif %}</dd></div>
+      <div class="wide"><dt>Last error</dt><dd>{% if latest_health.error %}<code class="error-code">{{ latest_health.error }}</code>{% else %}—{% endif %}</dd></div>
+    </dl>
+    {% else %}<div class="empty-inline">This company has not been verified yet.</div>{% endif %}
+  </details>
+</section>
+
+<div class="two-col detail-cols">
+<section class="panel">
+  <div class="panel-header"><div><h2>Health history</h2><p>Recent verification results.</p></div></div>
+  {% if health_history %}<div class="table-wrap"><table><thead><tr><th>Date</th><th>Jobs</th><th>Status</th><th>Change</th></tr></thead><tbody>{% for h in health_history %}<tr><td><a href="/runs/{{ h.run_id }}"><time class="local-time" datetime="{{ h.run_created_at }}"></time></a></td><td>{{ h.jobs_found }}</td><td>{{ badge(h.status) }}</td><td>{% if h.count_change_pct is not none %}{{ h.count_change_pct }}%{% else %}—{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-state small"><span>No verification history yet.</span></div>{% endif %}
+</section>
+<section class="panel">
+  <div class="panel-header"><div><h2>Current jobs</h2><p>{{ active_jobs }} active jobs stored.</p></div><a class="text-link" href="/jobs?company={{ company.id }}">View all →</a></div>
+  {% if jobs %}<div class="mini-list">{% for j in jobs %}<a href="/jobs/detail?company={{ j.company_id|urlquote }}&external_id={{ j.external_id|urlquote }}"><span><strong>{{ j.title }}</strong><small>{{ j.location or 'Location not provided' }}</small></span><span class="muted">→</span></a>{% endfor %}</div>{% else %}<div class="empty-state small"><span>No active jobs stored for this company.</span></div>{% endif %}
+</section>
+</div>
+
+<dialog id="edit-company-dialog" class="dialog">
+  <form id="edit-company-form" class="stack-form" data-company-id="{{ company.id }}">
+    <div class="dialog-header"><div><h2>Edit {{ company.name }}</h2><p>Update configuration without deleting job history.</p></div><button type="button" class="icon-btn" data-close-dialog>×</button></div>
+    <div class="form-grid two">
+      <label><span>Company name</span><input name="name" required value="{{ company.name }}"></label>
+      <label><span>Career URL</span><input name="career_url" type="url" required value="{{ company.career_url }}"></label>
+      <label><span>Source</span><select name="source_type" data-source-select>{% for s in source_schema.types %}<option value="{{ s }}" {% if s==company.source.type %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      <label><span>Rank</span><input name="rank" type="number" min="1" value="{{ company.rank or '' }}"></label>
+    </div>
+    <details class="advanced"><summary>Advanced source configuration</summary><div class="source-fields" data-source-fields data-initial='{{ company.source|tojson|forceescape }}'></div></details>
+    <div class="form-error" data-form-error></div>
+    <div class="dialog-actions"><button type="button" class="btn btn-ghost" data-close-dialog>Cancel</button><button class="btn btn-primary" type="submit">Save changes</button></div>
+  </form>
+</dialog>
+
+<dialog id="disable-company-dialog" class="dialog confirm-dialog">
+  <div class="dialog-header"><div><h2>Disable <span data-disable-name></span>?</h2><p>The company will no longer be included in Fetch All or Verify All. Previously collected jobs and run history are preserved.</p></div></div>
+  <div class="dialog-actions"><button class="btn btn-ghost" data-close-dialog>Cancel</button><button class="btn btn-danger" data-disable-confirm>Disable</button></div>
+</dialog>
+{% endblock %}

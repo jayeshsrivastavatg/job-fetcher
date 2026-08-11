@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Relevant Jobs · Job Fetcher{% endblock %}
+{% block heading %}Relevant Jobs{% endblock %}
+{% block eyebrow %}Deterministic job discovery{% endblock %}
+{% block content %}
+<section class="stats-grid candidate-stats">
+  <article class="stat-card"><span class="stat-label">Active jobs</span><strong>{{ "{:,}".format(stats.active_jobs) }}</strong><small>Current scraper inventory</small></article>
+  <article class="stat-card"><span class="stat-label">Analyzed</span><strong>{{ "{:,}".format(stats.analyzed) }}</strong><small>{{ stats.pending }} pending</small></article>
+  <article class="stat-card"><span class="stat-label">Relevant</span><strong>{{ "{:,}".format(stats.relevant_jobs) }}</strong><small>Score ≥ {{ profile.scoring.relevantMinScore }}</small></article>
+  <article class="stat-card"><span class="stat-label">High priority</span><strong>{{ stats.statuses.get('high',0) }}</strong><small>Score ≥ {{ profile.scoring.highPriorityScore }}</small></article>
+</section>
+
+<section class="panel">
+  <details class="diagnostics">
+    <summary><div><h2>Active relevance profile</h2><p>{{ profile.candidate.experienceYears }} years · {{ profile.candidate.targetCountry }} · scoring rules are local and deterministic.</p></div><span>Show profile</span></summary>
+    <div class="profile-summary">
+      <div><strong>Target role families</strong><div class="tag-list">{% for family in profile.roleFamilies %}<span>{{ family.label }}</span>{% endfor %}</div></div>
+      <div><strong>Primary scoring skills</strong><div class="tag-list">{% for skill in profile.primarySkills %}<span>{{ skill.name }}</span>{% endfor %}</div></div>
+      <div><strong>Experience policy</strong><p>{{ profile.experiencePolicy.preferredMinimumJDExperience }}+ years is preferred; {{ profile.experiencePolicy.idealExperience }} years is the target; {{ profile.experiencePolicy.hardRejectMinimumYears }}+ required years is filtered by default.</p></div>
+      <div><strong>Relevance threshold</strong><p>Score ≥ {{ profile.scoring.relevantMinScore }} is considered relevant. High priority begins at {{ profile.scoring.highPriorityScore }}.</p></div>
+      <p class="muted profile-file-note">Runtime profile: <code>data/profile.json</code>. Versionable template: <code>config/profile.example.json</code>.</p>
+    </div>
+  </details>
+</section>
+
+<section class="panel compact-panel">
+  <div class="candidate-actions">
+    <div><strong>Relevance scoring pipeline</strong><span class="muted">Java backend / Java+React / Node+TypeScript targets using deterministic rules.</span></div>
+    <div class="button-row">
+      <button class="btn btn-secondary" data-analyze-relevance>Analyze New / Changed</button>
+      <button class="btn btn-ghost" data-recompute-relevance>Recompute All</button>
+    </div>
+  </div>
+</section>
+
+<section class="panel compact-panel">
+<form class="filters job-filters" method="get">
+  <label class="search-field wide"><span class="sr-only">Search relevant jobs</span><input name="q" value="{{ filters.q }}" placeholder="Search title, description, company…"></label>
+  <label><span>Company</span><select name="company"><option value="">All companies</option>{% for c in companies %}<option value="{{ c.id }}" {% if filters.company==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+  <label><span>Status</span><select name="status"><option value="">All statuses</option>{% for value,label in [('high','High'),('good','Good'),('possible','Possible'),('low','Low'),('filtered','Filtered'),('duplicate','Duplicate')] %}<option value="{{ value }}" {% if filters.status==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>Role family</span><select name="family"><option value="">All families</option>{% for value,label in families %}<option value="{{ value }}" {% if filters.family==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>Change</span><select name="change_type"><option value="">All</option>{% for value,label in [('new','New'),('changed','Changed'),('baseline','Baseline'),('unchanged','Unchanged')] %}<option value="{{ value }}" {% if filters.change_type==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>Min score</span><input name="min_score" type="number" min="0" max="100" step="1" value="{{ filters.min_score if filters.min_score is not none else '' }}" placeholder="0"></label>
+  <label class="check-label boxed"><input type="checkbox" name="relevant_only" value="true" {% if filters.relevant_only %}checked{% endif %}><span>Relevant only</span></label>
+  <button class="btn btn-secondary" type="submit">Apply</button><a class="btn btn-ghost" href="/relevance">Clear</a>
+</form>
+</section>
+
+<section class="panel table-panel">
+{% if jobs %}
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Score</th><th>Title</th><th>Company</th><th>Role family</th><th>Experience</th><th>Change</th><th>Status</th><th>Relevant</th></tr></thead><tbody>
+{% for j in jobs %}
+<tr>
+  <td><span class="score-pill score-{{ j.relevance_status }}">{{ "%.0f"|format(j.relevance_score) }}</span></td>
+  <td><a class="strong-link" href="/jobs/detail?company={{ j.company_id|urlquote }}&external_id={{ j.external_id|urlquote }}">{{ j.title }}</a><span class="row-subtext">{{ j.normalized_location or j.location or 'Unknown' }}</span></td>
+  <td>{{ j.company_name }}</td>
+  <td>{{ j.role_label or '—' }}</td>
+  <td>{% if j.min_experience is not none %}{% if j.max_experience is not none %}{{ "%g"|format(j.min_experience) }}–{{ "%g"|format(j.max_experience) }} yrs{% else %}{{ "%g"|format(j.min_experience) }}+ yrs{% endif %}{% else %}Not stated{% endif %}</td>
+  <td><span class="candidate-change">{{ (j.change_type or '—')|title }}</span></td>
+  <td><span class="candidate-state state-{{ j.relevance_status }}">{{ j.relevance_status|title }}</span>{% if j.filter_reason %}<span class="row-subtext truncate">{{ j.filter_reason }}</span>{% endif %}</td>
+  <td>{% if j.is_relevant %}<span class="plain-state on">Yes</span>{% else %}<span class="plain-state">No</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<nav class="pagination" aria-label="Relevant job pages">
+  {% if result.page > 1 %}<a class="btn btn-ghost" href="{{ prev_url }}">← Previous</a>{% endif %}
+  <span>Page {{ result.page }} of {{ result.pages }} · {{ result.total }} jobs</span>
+  {% if result.page < result.pages %}<a class="btn btn-ghost" href="{{ next_url }}">Next →</a>{% endif %}
+</nav>
+{% else %}
+<div class="empty-state"><strong>No scored jobs match these filters.</strong><span>{% if stats.analyzed == 0 %}Run relevance analysis to create the first baseline.{% else %}Try clearing one or more filters.{% endif %}</span>{% if stats.analyzed == 0 %}<button class="btn btn-primary" data-analyze-relevance>Analyze Jobs</button>{% endif %}</div>
+{% endif %}
+</section>
+{% endblock %}

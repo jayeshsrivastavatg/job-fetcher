@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Jobs · Job Fetcher{% endblock %}
+{% block heading %}Jobs{% endblock %}
+{% block eyebrow %}Collected job data{% endblock %}
+{% block content %}
+<section class="page-toolbar"><div><strong>{{ "{:,}".format(result.total) }}</strong> matching jobs</div></section>
+<section class="panel compact-panel">
+<form class="filters job-filters" method="get">
+  <label class="search-field wide"><span class="sr-only">Search jobs</span><input name="q" value="{{ filters.q }}" placeholder="Search title, description, company…"></label>
+  <label><span>Company</span><select name="company"><option value="">All companies</option>{% for c in companies %}<option value="{{ c.id }}" {% if filters.company==c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+  <label><span>Location</span><input name="location" value="{{ filters.location }}" list="locations" placeholder="Any location"><datalist id="locations">{% for l in locations %}<option value="{{ l }}">{% endfor %}</datalist></label>
+  <label><span>Status</span><select name="status"><option value="active" {% if filters.status=='active' %}selected{% endif %}>Active</option><option value="inactive" {% if filters.status=='inactive' %}selected{% endif %}>Inactive</option><option value="all" {% if filters.status=='all' %}selected{% endif %}>All</option></select></label>
+  <label><span>Posted</span><select name="posted_days"><option value="">Any time</option>{% for d,label in [(1,'Last 24h'),(7,'Last 7 days'),(30,'Last 30 days')] %}<option value="{{ d }}" {% if filters.posted_days==d %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>First seen</span><select name="first_seen_days"><option value="">Any time</option>{% for d,label in [(1,'Last 24h'),(7,'Last 7 days'),(30,'Last 30 days')] %}<option value="{{ d }}" {% if filters.first_seen_days==d %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <button class="btn btn-secondary" type="submit">Apply</button><a class="btn btn-ghost" href="/jobs">Clear</a>
+</form>
+</section>
+<section class="panel table-panel">
+{% if jobs %}
+<div class="table-wrap"><table class="data-table jobs-table"><thead><tr><th>Title</th><th>Company</th><th>Location</th><th>Posted</th><th>First seen</th><th>Last seen</th><th>Status</th></tr></thead><tbody>
+{% for j in jobs %}<tr><td><a class="strong-link" href="/jobs/detail?company={{ j.company_id|urlquote }}&external_id={{ j.external_id|urlquote }}">{{ j.title }}</a></td><td>{{ j.company_name }}</td><td>{{ j.location or '—' }}</td><td>{{ j.posted_at or '—' }}</td><td><time class="local-time" datetime="{{ j.first_seen_at }}"></time></td><td><time class="local-time" datetime="{{ j.last_seen_at }}"></time></td><td>{% if j.active %}<span class="plain-state on">Active</span>{% else %}<span class="plain-state">Inactive</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+<nav class="pagination" aria-label="Jobs pages">
+  {% if result.page > 1 %}<a class="btn btn-ghost" href="{{ prev_url }}">← Previous</a>{% endif %}
+  <span>Page {{ result.page }} of {{ result.pages }}</span>
+  {% if result.page < result.pages %}<a class="btn btn-ghost" href="{{ next_url }}">Next →</a>{% endif %}
+</nav>
+{% else %}<div class="empty-state"><strong>No jobs match these filters.</strong><span>Try clearing one or more filters.</span><a class="text-link" href="/jobs">Clear filters</a></div>{% endif %}
+</section>
+{% endblock %}
