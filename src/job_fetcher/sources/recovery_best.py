@@ -5,6 +5,7 @@ from copy import deepcopy
 from job_fetcher.job_quality import prefer_usable_jobs, valid_http_url
 from job_fetcher.sources.generic_extract import dedupe
 from job_fetcher.sources.recovery import RECOVERY_PLANS, RecoverySource
+from job_fetcher.sources.slow_official_html import SlowOfficialHtmlSource
 from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
 
 
@@ -88,4 +89,6 @@ class BestRecoverySource(RecoverySource):
     def _adapter(kind: str | None):
         if kind == "smartrecruiters":
             return SmartRecruitersSource()
+        if kind == "slow_official_html":
+            return SlowOfficialHtmlSource()
         return RecoverySource._adapter(kind)
