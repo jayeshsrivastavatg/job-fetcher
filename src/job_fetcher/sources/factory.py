@@ -15,14 +15,14 @@ from job_fetcher.sources.meta import MetaSource
 from job_fetcher.sources.amazon import AmazonSource
 from job_fetcher.sources.manual import ManualSource
 from job_fetcher.sources.avature import AvatureSource
-from job_fetcher.sources.auto import AutoSource
+from job_fetcher.sources.strict_auto import StrictAutoSource
 from job_fetcher.sources.atlassian import AtlassianSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
 
 SOURCES = {
-    "auto": AutoSource,
+    "auto": StrictAutoSource,
     "greenhouse": GreenhouseSource,
     "lever": LeverSource,
     "ashby": AshbySource,
