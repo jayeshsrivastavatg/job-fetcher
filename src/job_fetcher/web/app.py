@@ -17,6 +17,7 @@ from job_fetcher.config import find_company, load_config
 from job_fetcher.run_manager import RunConflict, get_manager
 from job_fetcher.settings import load_settings, save_settings
 from job_fetcher.storage import JobStore, RunStore, RelevanceStore, ROOT
+from job_fetcher.relevance_query import RelevanceStore
 from job_fetcher.relevance_service import analyze_relevance, relevance_stats
 from job_fetcher.profile import load_profile
 
