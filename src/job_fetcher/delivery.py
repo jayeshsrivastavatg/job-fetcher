@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from job_fetcher.india_location import LOCATION_RULESET_VERSION, is_india_job
 from job_fetcher.profile import load_profile
 from job_fetcher.storage import ROOT, _connect
 
 RUN_REPORTS_ROOT = ROOT / "reports" / "runs"
 LATEST_REPORTS_ROOT = ROOT / "reports" / "latest"
+DELIVERY_SCHEMA_VERSION = 3
 
 
 def _json_text(payload: dict[str, Any]) -> str:
@@ -20,10 +22,16 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _target_location_ok(normalized_location: str | None, profile: dict[str, Any]) -> bool:
+def _target_location_ok(job: dict[str, Any], normalized_location: str | None, profile: dict[str, Any]) -> bool:
     target = str((profile.get("candidate") or {}).get("targetCountry") or "").strip().lower()
     if not target:
         return True
+    if target == "india":
+        return is_india_job(
+            job.get("location"),
+            description=job.get("description"),
+            raw=job.get("raw") or job.get("raw_json"),
+        )
     return target in str(normalized_location or "").lower()
 
 
@@ -63,10 +71,10 @@ def _is_latest_artifact_run(conn, run_id: str) -> bool:
 def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
     """Upgrade/finalize one frozen run into the App-2 delivery contract.
 
-    The first deliverable is a baseline containing every relevant target-country
-    job observed in that frozen run. Later deliverables are incremental and only
-    contain NEW/CHANGED relevant target-country jobs. Existing v1 artifacts are
-    migrated from their already-frozen run snapshots, so no refetch is required.
+    The first deliverable is a baseline containing every relevant India job observed
+    in that frozen run. Later deliverables are incremental and only contain NEW or
+    CHANGED relevant India jobs. Existing artifacts are regenerated from frozen run
+    snapshots when the delivery/location ruleset changes, so no refetch is required.
     """
     profile = load_profile()
     with _connect() as conn:
@@ -78,7 +86,11 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
             return None
 
         existing_payload = _artifact_payload(artifact["content_text"])
-        if existing_payload.get("schema_version", 0) >= 2 and existing_payload.get("delivery_mode") in {"baseline", "incremental"}:
+        if (
+            existing_payload.get("schema_version", 0) >= DELIVERY_SCHEMA_VERSION
+            and existing_payload.get("delivery_mode") in {"baseline", "incremental"}
+            and existing_payload.get("location_ruleset") == LOCATION_RULESET_VERSION
+        ):
             return dict(artifact)
 
         mode = "incremental" if _prior_delivery_exists(conn, run) else "baseline"
@@ -100,8 +112,9 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
         changed_relevant = 0
         ai_jobs: list[dict[str, Any]] = []
         for row in rows:
+            job = json.loads(row["snapshot_json"])
             relevant = bool(row["is_relevant"])
-            target_location = _target_location_ok(row["normalized_location"], profile)
+            target_location = _target_location_ok(job, row["normalized_location"], profile)
             observed = bool(row["observed"])
             event_type = str(row["event_type"])
             eligible_baseline = observed and relevant and target_location
@@ -118,7 +131,6 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
             if not include:
                 continue
 
-            job = json.loads(row["snapshot_json"])
             job.update({
                 "event_type": event_type,
                 "normalized_location": row["normalized_location"],
@@ -147,8 +159,9 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
         generated_at = artifact["generated_at"]
         target_country = (profile.get("candidate") or {}).get("targetCountry")
         ai_payload = {
-            "schema_version": 2,
+            "schema_version": DELIVERY_SCHEMA_VERSION,
             "delivery_mode": mode,
+            "location_ruleset": LOCATION_RULESET_VERSION,
             "run_id": run_id,
             "generated_at": generated_at,
             "target_country": target_country,
@@ -158,8 +171,9 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
         ai_text = _json_text(ai_payload)
         ai_sha = _sha256(ai_text)
         manifest_payload = {
-            "schema_version": 2,
+            "schema_version": DELIVERY_SCHEMA_VERSION,
             "delivery_mode": mode,
+            "location_ruleset": LOCATION_RULESET_VERSION,
             "run_id": run_id,
             "run_created_at": run["created_at"],
             "run_started_at": run["started_at"],
@@ -219,7 +233,7 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
 
 
 def ensure_all_delivery_artifacts() -> None:
-    """Migrate v1 artifacts in chronological order so only the first is baseline."""
+    """Migrate artifacts in chronological order so only the first is baseline."""
     with _connect() as conn:
         rows = conn.execute(
             '''SELECT ra.run_id,ra.content_text FROM run_artifacts ra JOIN runs r ON r.id=ra.run_id
@@ -228,5 +242,9 @@ def ensure_all_delivery_artifacts() -> None:
         ).fetchall()
     for row in rows:
         payload = _artifact_payload(row["content_text"])
-        if payload.get("schema_version", 0) < 2 or payload.get("delivery_mode") not in {"baseline", "incremental"}:
+        if (
+            payload.get("schema_version", 0) < DELIVERY_SCHEMA_VERSION
+            or payload.get("delivery_mode") not in {"baseline", "incremental"}
+            or payload.get("location_ruleset") != LOCATION_RULESET_VERSION
+        ):
             ensure_delivery_artifact(str(row["run_id"]))
