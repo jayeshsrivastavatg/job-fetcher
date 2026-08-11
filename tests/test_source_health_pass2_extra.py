@@ -14,10 +14,15 @@ def test_second_pass_recovery_registry_loads_from_factory():
     assert isinstance(build_source(snowflake), PhenomSource)
 
     from job_fetcher.sources.recovery import RECOVERY_PLANS
-    assert "cars24" in RECOVERY_PLANS
-    assert "urban_company" in RECOVERY_PLANS
-    assert "epam" in RECOVERY_PLANS
-    assert "snowflake" in RECOVERY_PLANS
+    for company_id in (
+        "cars24", "urban_company", "epam", "snowflake", "zomato_blinkit", "winzo"
+    ):
+        assert company_id in RECOVERY_PLANS
+    assert RECOVERY_PLANS["zomato_blinkit"][0] == {
+        "kind": "smartrecruiters",
+        "company_identifier": "Zomato1",
+    }
+    assert RECOVERY_PLANS["winzo"][0]["entry_url"] == "https://winzo.keka.com/careers"
 
 
 def test_allow_zero_auto_source_honors_explicit_empty_page(monkeypatch):
