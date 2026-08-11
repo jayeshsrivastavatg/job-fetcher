@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import threading
 import traceback
-from pathlib import Path
 from typing import Any
 
 from job_fetcher.config import load_config
 from job_fetcher.relevance_service import analyze_relevance
 from job_fetcher.health import verify_all
+from job_fetcher.run_history import RunHistoryStore
 from job_fetcher.service import fetch_companies_detailed
 from job_fetcher.settings import apply_settings, load_settings
 from job_fetcher.storage import ROOT, RunStore
@@ -29,6 +29,7 @@ class OperationManager:
 
     def __init__(self):
         self.store = RunStore()
+        self.history = RunHistoryStore()
         self._lock = threading.RLock()
         self._threads: dict[str, threading.Thread] = {}
 
@@ -91,21 +92,34 @@ class OperationManager:
         self.store.mark_running(run_id)
         try:
             if run_type == "fetch":
+                before = self.history.capture_inventory([c["id"] for c in companies])
+
+                def record_snapshot(row: dict[str, Any], jobs: list[Any]):
+                    company_id = str(row.get("id") or "")
+                    self.history.record_company_snapshot(
+                        run_id,
+                        before.get(company_id, {}),
+                        row,
+                        jobs,
+                    )
+
                 fetch_companies_detailed(
                     companies,
                     max_workers=settings["fetch_workers"],
                     drop_threshold=settings["verification_drop_threshold"],
                     on_result=lambda row: self.store.record_company_result(run_id, row),
+                    on_snapshot=record_snapshot,
                 )
-                # Relevance analysis is local/deterministic and incremental. A fetch
-                # automatically scores only jobs that are new to the pipeline or whose
-                # title/location/JD content changed. Scraper success does not depend on
-                # this secondary step; a scoring error is surfaced in stderr and can be
-                # retried from the Relevant Jobs page/CLI.
+                # Relevance analysis is local/deterministic and incremental. Once it
+                # succeeds we freeze the exact relevance state for this run and build
+                # the immutable AI-input artifact. A scoring/artifact problem does not
+                # discard the successfully fetched jobs; it is surfaced on the run.
                 try:
                     analyze_relevance(recompute_all=False)
-                except Exception:
+                    self.history.finalize_run(run_id)
+                except Exception as exc:
                     traceback.print_exc()
+                    self.history.mark_artifact_error(run_id, f"{type(exc).__name__}: {exc}")
             elif run_type == "verify":
                 previous_counts = None
                 write_reports = scope == "all"
