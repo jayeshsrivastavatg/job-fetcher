@@ -48,11 +48,7 @@ SOURCES = {
 
 
 def build_raw_source(company):
-    """Build exactly the adapter configured in companies.yaml.
-
-    RecoverySource uses this as its final fallback without recursively routing
-    back through the recovery registry.
-    """
+    """Build exactly the adapter configured in companies.yaml."""
     source_type = company["source"]["type"]
     if source_type not in SOURCES:
         raise ValueError(f"Unsupported source type: {source_type}")
@@ -60,12 +56,10 @@ def build_raw_source(company):
 
 
 def build_source(company):
-    # A small set of branded career sites are known to be brittle or to expose a
-    # misleading secondary ATS link (for example a resume-matching widget). For
-    # those companies, try verified first-party recovery surfaces before falling
-    # back to the user's configured adapter.
-    from job_fetcher.sources.recovery import RecoverySource, has_recovery_plan
+    """Public factory contract: return the adapter configured for the company.
 
-    if has_recovery_plan(company):
-        return RecoverySource()
+    Recovery is applied by the fetch/health orchestration layer rather than here,
+    so diagnostics and existing callers can still rely on the configured adapter
+    type (AtlassianSource, EightfoldSource, AvatureSource, etc.).
+    """
     return build_raw_source(company)
