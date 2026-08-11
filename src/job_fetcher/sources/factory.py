@@ -72,11 +72,11 @@ def build_source(company):
             AmazonJsonSource,
             ConfluentAshbySource,
             SnowflakeAshbySource,
-            UberIndiaSource,
         )
+        from job_fetcher.sources.guarded_provider_overrides import GuardedUberIndiaSource
         current = {
             "amazon": AmazonJsonSource,
-            "uber": UberIndiaSource,
+            "uber": GuardedUberIndiaSource,
             "snowflake": SnowflakeAshbySource,
             "confluent": ConfluentAshbySource,
         }
