@@ -58,10 +58,21 @@ def build_raw_source(company):
 def build_source(company):
     """Return the configured adapter, enhanced with recovery where necessary.
 
-    Recovery wrappers subclass the configured adapter (AutoSource, EightfoldSource,
-    AtlassianSource or AvatureSource), so existing diagnostics/type expectations
-    remain valid while actual fetches get the hardened first-party fallback paths.
+    Recovery wrappers subclass the configured adapter, so existing diagnostics and
+    type expectations remain valid while actual fetches get hardened first-party
+    fallback paths.
     """
+    # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
+    # Check that signal before generic extraction can mistake navigation links for
+    # vacancies (Zerodha is the current example).
+    source = company.get("source") or {}
+    if source.get("type") == "auto" and source.get("allow_zero_jobs"):
+        from job_fetcher.sources.zero_aware_auto import ZeroAwareAutoSource
+        return ZeroAwareAutoSource()
+
+    # Importing the second-pass registry mutates the shared recovery plan mapping
+    # before we decide whether this company needs a wrapper.
+    import job_fetcher.sources.recovery_extra  # noqa: F401
     from job_fetcher.sources.recovery import has_recovery_plan
 
     if has_recovery_plan(company):

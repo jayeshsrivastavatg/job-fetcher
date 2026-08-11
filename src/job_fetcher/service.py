@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
+from job_fetcher.job_quality import prefer_usable_jobs
 from job_fetcher.sources.factory import build_source
 from job_fetcher.storage import JobStore
 
@@ -51,7 +52,7 @@ def _discovered_endpoints(jobs):
 
 def _fetch_one(c):
     try:
-        jobs = build_source(c).fetch(c)
+        jobs = prefer_usable_jobs(build_source(c).fetch(c))
         return c, jobs, None
     except Exception as e:
         return c, None, e
@@ -160,7 +161,7 @@ def fetch_companies_detailed(
         adapter_obj = None
         try:
             adapter_obj = build_source(c)
-            jobs = list(adapter_obj.fetch(c) or [])
+            jobs = prefer_usable_jobs(adapter_obj.fetch(c))
             return c, jobs, None, round(time.perf_counter() - started, 3), type(adapter_obj).__name__
         except Exception as exc:
             adapter = type(adapter_obj).__name__ if adapter_obj is not None else (c.get("source") or {}).get("type", "unknown")
