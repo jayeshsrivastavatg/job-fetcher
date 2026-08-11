@@ -39,7 +39,6 @@ def classify_error(e):
 
 
 
-
 def _discovered_endpoints(jobs):
     endpoints = set()
     for job in jobs or []:
@@ -48,6 +47,7 @@ def _discovered_endpoints(jobs):
         if url:
             endpoints.add(str(url))
     return sorted(endpoints)[:50]
+
 
 def _fetch_one(c):
     try:
@@ -128,12 +128,24 @@ def jobs_used_browser(jobs) -> bool:
     return False
 
 
-def fetch_companies_detailed(companies, max_workers=4, *, drop_threshold: float = 0.80, on_result=None):
+def fetch_companies_detailed(
+    companies,
+    max_workers=4,
+    *,
+    drop_threshold: float = 0.80,
+    on_result=None,
+    on_snapshot=None,
+):
     """Fetch enabled companies with lifecycle-safe snapshot semantics.
 
     Unlike the legacy CLI helper, this method emits one normalized result per
     company and will not deactivate historical jobs when a run looks incomplete
     (zero jobs or a >drop_threshold count collapse).
+
+    `on_snapshot`, when supplied, receives `(result_row, jobs)` after the jobs have
+    been persisted. It exists so run-history code can record the exact set returned
+    by the provider without bloating the normal run result payload with thousands
+    of job IDs.
     """
     import time
     from job_fetcher.sources.factory import build_source
@@ -171,6 +183,7 @@ def fetch_companies_detailed(companies, max_workers=4, *, drop_threshold: float 
                         "count_change_pct": None, "browser_used": False,
                         "failure_category": classify_error(exc), "error": f"{type(exc).__name__}: {exc}",
                         "source_types": [], "discovered_endpoints": [], "duration_seconds": duration,
+                        "snapshot_complete": False,
                     }
                 else:
                     jobs = list(jobs or [])
@@ -182,9 +195,6 @@ def fetch_companies_detailed(companies, max_workers=4, *, drop_threshold: float 
                     browser_used = jobs_used_browser(jobs)
                     complete = (n > 0 and not suspicious_drop) or (n == 0 and allow_zero)
                     if n == 0 and allow_zero:
-                        # A known-empty board is a successful observation, but do
-                        # not deactivate historical jobs automatically from a zero
-                        # snapshot without a provider-specific completeness proof.
                         status = "healthy"
                         category = error = None
                     elif n == 0:
@@ -212,6 +222,8 @@ def fetch_companies_detailed(companies, max_workers=4, *, drop_threshold: float 
                 result["companies"].append(row)
                 if on_result is not None:
                     on_result(dict(row))
+                if on_snapshot is not None:
+                    on_snapshot(dict(row), list(jobs or []) if exc is None else [])
     finally:
         store.close()
 

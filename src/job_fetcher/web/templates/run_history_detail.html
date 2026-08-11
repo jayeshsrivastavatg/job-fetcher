@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Fetch Run {{ run.id }} · Job Fetcher{% endblock %}
+{% block heading %}Fetch Run #{{ run.id }}{% endblock %}
+{% block eyebrow %}<a class="breadcrumb" href="/runs?kind=fetch">Runs</a> / immutable history{% endblock %}
+{% block content %}
+{% if run.status in ['queued','running'] %}
+<div class="live-banner"><span class="pulse"></span><div><strong>Fetch is still running</strong><span>The immutable snapshot and AI file are finalized after relevance analysis completes.</span></div></div>
+{% endif %}
+
+<section class="run-overview panel">
+  <div class="run-topline">
+    <div>{{ badge(run.status) }} <span class="muted">{{ run.scope|title }} scope</span></div>
+    <div><time class="local-time" datetime="{{ run.started_at or run.created_at }}"></time></div>
+  </div>
+  {% if summary %}
+  <div class="metric-grid run-metrics">
+    <div><span>Jobs fetched</span><strong>{{ "{:,}".format(summary.snapshot_jobs) }}</strong></div>
+    <div><span>New</span><strong>{{ summary.jobs_new }}</strong></div>
+    <div><span>Changed</span><strong>{{ summary.jobs_changed }}</strong></div>
+    <div><span>Unchanged</span><strong>{{ "{:,}".format(summary.jobs_unchanged) }}</strong></div>
+    <div><span>Closed</span><strong>{{ summary.jobs_closed }}</strong></div>
+    <div><span>New relevant</span><strong>{{ summary.new_relevant }}</strong></div>
+    <div><span>Changed relevant</span><strong>{{ summary.changed_relevant }}</strong></div>
+    <div><span>AI input</span><strong>{{ summary.ai_input_count }}</strong></div>
+  </div>
+  {% else %}
+  <div class="empty-state small">
+    <strong>No immutable job snapshot for this run.</strong>
+    <span>{% if run.status in ['queued','running'] %}It will appear when this run finishes.{% else %}This is a legacy run created before per-run job history was introduced, or artifact generation failed.{% endif %}</span>
+    {% if summary and summary.artifact_error %}<code>{{ summary.artifact_error }}</code>{% endif %}
+  </div>
+  {% endif %}
+</section>
+
+{% if artifact %}
+<section class="panel compact-panel">
+  <div class="candidate-actions">
+    <div>
+      <strong>AI-ready immutable file</strong>
+      <span class="muted">{{ summary.ai_input_count }} NEW/CHANGED relevant jobs · SHA-256 {{ artifact.sha256[:12] }}…</span>
+      <span class="row-subtext">Generated {{ artifact.generated_at[:19] }} UTC{% if artifact.downloaded_at %} · downloaded before{% endif %}{% if artifact.git_prepared_at %} · Git copy prepared{% endif %}</span>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-primary" href="/history/runs/{{ run.id }}/download/ai-input">Download AI Input</a>
+      <a class="btn btn-secondary" href="/history/runs/{{ run.id }}/download/manifest">Manifest</a>
+      <form method="post" action="/history/runs/{{ run.id }}/prepare-github" style="display:inline">
+        <button class="btn btn-ghost" type="submit">Prepare GitHub Copy</button>
+      </form>
+    </div>
+  </div>
+  <p class="muted">The AI file is frozen for this run. Preparing a GitHub copy writes it under <code>run-history/</code>; review it before committing, especially if this repository is public.</p>
+</section>
+{% elif summary and summary.artifact_error %}
+<section class="panel"><div class="run-error"><strong>AI artifact generation failed</strong><code>{{ summary.artifact_error }}</code></div></section>
+{% endif %}
+
+{% if summary %}
+<section class="panel compact-panel">
+<form class="filters job-filters" method="get">
+  <label class="search-field wide"><span class="sr-only">Search run jobs</span><input name="q" value="{{ filters.q }}" placeholder="Search title, company, location…"></label>
+  <label><span>Company</span><select name="company"><option value="">All companies</option>{% for c in companies %}<option value="{{ c.company_id }}" {% if filters.company==c.company_id %}selected{% endif %}>{{ c.company_name }}</option>{% endfor %}</select></label>
+  <label><span>Event</span><select name="event"><option value="">All events</option>{% for value,label in [('new','New'),('changed','Changed'),('unchanged','Unchanged'),('closed','Closed')] %}<option value="{{ value }}" {% if filters.event==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span>Relevant</span><select name="relevant"><option value="all" {% if filters.relevant=='all' %}selected{% endif %}>All</option><option value="yes" {% if filters.relevant=='yes' %}selected{% endif %}>Relevant only</option><option value="no" {% if filters.relevant=='no' %}selected{% endif %}>Not relevant</option></select></label>
+  <label><span>Min score</span><input name="min_score" type="number" min="0" max="100" step="1" value="{{ filters.min_score if filters.min_score is not none else '' }}"></label>
+  <button class="btn btn-secondary" type="submit">Apply</button><a class="btn btn-ghost" href="/history/runs/{{ run.id }}">Clear</a>
+</form>
+</section>
+
+<section class="panel table-panel">
+<div class="panel-header"><div><h2>Jobs in this run</h2><p>Exact provider membership and frozen relevance state for this fetch.</p></div><a class="text-link" href="/runs/{{ run.id }}">Technical run details →</a></div>
+{% if jobs %}
+<div class="table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Score</th><th>Title</th><th>Company</th><th>Location</th><th>Posted</th><th>First found</th><th>Relevant</th></tr></thead><tbody>
+{% for j in jobs %}
+<tr>
+  <td><span class="candidate-change">{{ j.event_type|title }}</span></td>
+  <td>{% if j.relevance_score is not none %}<span class="score-pill score-{{ j.relevance_status or 'filtered' }}">{{ "%.0f"|format(j.relevance_score) }}</span>{% else %}—{% endif %}</td>
+  <td><a class="strong-link" href="/history/job?run_id={{ run.id|urlquote }}&company={{ j.company_id|urlquote }}&external_id={{ j.external_id|urlquote }}">{{ j.title }}</a></td>
+  <td>{{ j.company_name }}</td>
+  <td>{{ j.normalized_location or j.location or 'Unknown' }}</td>
+  <td>{{ j.posted_at[:10] if j.posted_at else '—' }}</td>
+  <td>{{ j.first_seen_at[:10] if j.first_seen_at else '—' }}</td>
+  <td>{% if j.is_relevant %}<span class="plain-state on">Yes</span>{% else %}<span class="plain-state">No</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table></div>
+<nav class="pagination" aria-label="Historical job pages">
+  {% if result.page > 1 %}<a class="btn btn-ghost" href="{{ prev_url }}">← Previous</a>{% endif %}
+  <span>Page {{ result.page }} of {{ result.pages }} · {{ result.total }} jobs</span>
+  {% if result.page < result.pages %}<a class="btn btn-ghost" href="{{ next_url }}">Next →</a>{% endif %}
+</nav>
+{% else %}<div class="empty-state small"><strong>No jobs match these run filters.</strong><span>Clear one or more filters.</span></div>{% endif %}
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if run.status in ['queued','running'] %}<script>setTimeout(() => location.reload(), 1500);</script>{% endif %}{% endblock %}
