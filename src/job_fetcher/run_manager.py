@@ -6,6 +6,7 @@ import traceback
 from typing import Any
 
 from job_fetcher.config import load_config
+from job_fetcher.delivery import ensure_all_delivery_artifacts, ensure_delivery_artifact
 from job_fetcher.relevance_service import analyze_relevance
 from job_fetcher.health import verify_all
 from job_fetcher.run_history import RunHistoryStore
@@ -38,6 +39,9 @@ class OperationManager:
         # A Python process cannot resume a previous process's worker thread. Mark
         # any leftover active rows explicitly instead of displaying them forever.
         self.store.interrupt_stale_runs()
+        # Schema-v1 AI artifacts were always incremental. Upgrade them in run order
+        # so the first actual App-2 handoff becomes a baseline without refetching.
+        ensure_all_delivery_artifacts()
         apply_settings(load_settings())
 
     def active(self) -> dict[str, Any] | None:
@@ -122,11 +126,12 @@ class OperationManager:
 
                 # Relevance analysis is local/deterministic and incremental. Once it
                 # succeeds we freeze the exact relevance state for this run and build
-                # the immutable AI-input artifact. A scoring/artifact problem does not
-                # discard the successfully fetched jobs; it is surfaced on the run.
+                # the immutable AI-input artifact. The first handoff is upgraded to a
+                # baseline; subsequent handoffs contain only NEW/CHANGED relevant jobs.
                 try:
                     analyze_relevance(recompute_all=False)
                     self.history.finalize_run(run_id)
+                    ensure_delivery_artifact(run_id)
                 except Exception as exc:
                     traceback.print_exc()
                     self.history.mark_artifact_error(run_id, f"{type(exc).__name__}: {exc}")
