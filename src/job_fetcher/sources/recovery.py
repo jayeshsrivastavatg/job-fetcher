@@ -5,14 +5,32 @@ from typing import Any
 
 from job_fetcher.sources.base import JobSource
 from job_fetcher.sources.generic_extract import dedupe
+from job_fetcher.sources.greenhouse import GreenhouseSource
 from job_fetcher.sources.official_html import OfficialHtmlSource
 from job_fetcher.sources.recovery_browser import RecoveryBrowserSource
+from job_fetcher.sources.successfactors import SuccessFactorsSource
 
 
-# First-party recovery surfaces for the red/failing companies reported by the UI.
-# The configured source remains the final fallback and the public source factory
-# continues to return the configured adapter type for diagnostics/tests.
+# First-party recovery surfaces for sources that are brittle, blocked or whose
+# generic extraction produces incomplete records. The configured source remains
+# the final fallback and the public source factory keeps its adapter type contract.
 RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
+    "rippling": [
+        {
+            "kind": "official_html",
+            "entry_url": "https://ats.rippling.com/rippling/jobs",
+            "default_location": "India",
+            "require_india": True,
+            "max_pages": 30,
+            "job_href_patterns": [r"ats\.rippling\.com/rippling/jobs/[0-9a-f-]{20,}"],
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://ats.rippling.com/rippling/jobs",
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 18,
+        },
+    ],
     "microsoft": [
         {
             "kind": "official_html",
@@ -30,6 +48,10 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
         },
     ],
     "twilio": [
+        {
+            "kind": "greenhouse",
+            "board_token": "twilio",
+        },
         {
             "kind": "official_html",
             "entry_url": "https://jobs.twilio.com/careers?domain=twilio.com&hl=en",
@@ -143,13 +165,19 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
     "confluent": [
         {
             "kind": "official_html",
-            "entry_url": "https://careers.confluent.io/open-positions/",
+            "entry_urls": [
+                "https://careers.confluent.io/open-positions/india-customer_solutions-engineering",
+                "https://careers.confluent.io/open-positions/india-spain-sweden-philippines",
+                "https://careers.confluent.io/open-positions/",
+            ],
+            "default_location": "India",
+            "require_india": True,
             "max_pages": 30,
-            "job_href_patterns": [r"careers\.confluent\.io/job/", r"/open-positions/[^/?#]+"],
+            "job_href_patterns": [r"careers\.confluent\.io/.*/job/", r"/open-positions/[^/?#]+"],
         },
         {
             "kind": "recovery_browser",
-            "entry_url": "https://careers.confluent.io/open-positions/",
+            "entry_url": "https://careers.confluent.io/open-positions/india-customer_solutions-engineering",
             "browser_max_pages": 20,
             "browser_max_scrolls": 12,
         },
@@ -157,7 +185,10 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
     "makemytrip": [
         {
             "kind": "official_html",
-            "entry_url": "https://careers.makemytrip.com/prod/",
+            "entry_urls": [
+                "https://careers.makemytrip.com/prod/careerPlaybook/software-engineering",
+                "https://careers.makemytrip.com/prod/",
+            ],
             "default_location": "India",
             "require_india": True,
             "max_pages": 25,
@@ -165,7 +196,7 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
         },
         {
             "kind": "recovery_browser",
-            "entry_url": "https://careers.makemytrip.com/prod/",
+            "entry_url": "https://careers.makemytrip.com/prod/careerPlaybook/software-engineering",
             "browser_max_pages": 15,
             "browser_max_scrolls": 10,
         },
@@ -218,6 +249,54 @@ RECOVERY_PLANS: dict[str, list[dict[str, Any]]] = {
             "browser_max_scrolls": 15,
         },
     ],
+    "inmobi": [
+        {"kind": "greenhouse", "board_token": "inmobi"},
+    ],
+    "elastic": [
+        {"kind": "greenhouse", "board_token": "elastic"},
+    ],
+    "hackerrank": [
+        {"kind": "greenhouse", "board_token": "hackerrank"},
+    ],
+    "chargebee": [
+        {
+            "kind": "successfactors",
+            "entry_url": "https://jobs.chargebee.com/",
+            "max_pages": 30,
+            "max_jobs": 5000,
+        },
+    ],
+    "druva": [
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://www.druva.com/why-druva/explore/careers",
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 15,
+            "browser_load_more_clicks": 20,
+        },
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://www.druva.com/why-druva/explore/careers/jobs",
+            "browser_max_pages": 20,
+            "browser_max_scrolls": 15,
+        },
+    ],
+    "oracle_oci": [
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://careers.oracle.com/en/sites/jobsearch/jobs?lastSelectedFacet=locations&selectedFlexFieldsFacets=%22AttributeChar13%7CProfessional%7C%7CAttributeChar15%7COCI%22&selectedLocationsFacet=300000000106947",
+            "browser_max_pages": 30,
+            "browser_max_scrolls": 12,
+        },
+    ],
+    "jpmorgan_chase": [
+        {
+            "kind": "recovery_browser",
+            "entry_url": "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs",
+            "browser_max_pages": 30,
+            "browser_max_scrolls": 12,
+        },
+    ],
 }
 
 
@@ -226,12 +305,7 @@ def has_recovery_plan(company: dict[str, Any]) -> bool:
 
 
 def fetch_with_recovery(company: dict[str, Any], primary_source: JobSource | None = None):
-    """Fetch using a recovery plan when one exists, otherwise the configured adapter.
-
-    This function belongs at the orchestration boundary. `build_source()` therefore
-    keeps returning the configured adapter type while actual fetches can recover from
-    a brittle listing, misleading secondary ATS, timeout, or false challenge.
-    """
+    """Fetch using a recovery plan when one exists, otherwise the configured adapter."""
     if has_recovery_plan(company):
         return RecoverySource(primary_source=primary_source).fetch(company)
     if primary_source is None:
@@ -241,7 +315,7 @@ def fetch_with_recovery(company: dict[str, Any], primary_source: JobSource | Non
 
 
 class RecoverySource(JobSource):
-    """Try verified first-party recovery surfaces, then the configured source."""
+    """Try verified first-party/provider recovery surfaces, then configured source."""
 
     def __init__(self, primary_source: JobSource | None = None):
         self.primary_source = primary_source
@@ -267,7 +341,6 @@ class RecoverySource(JobSource):
                 return dedupe(jobs)
             errors.append(f"recovery[{index}] {kind}: returned zero jobs")
 
-        # Final fallback is exactly the adapter configured in companies.yaml.
         try:
             primary = self.primary_source
             if primary is None:
@@ -290,4 +363,8 @@ class RecoverySource(JobSource):
             return OfficialHtmlSource()
         if kind == "recovery_browser":
             return RecoveryBrowserSource()
+        if kind == "greenhouse":
+            return GreenhouseSource()
+        if kind == "successfactors":
+            return SuccessFactorsSource()
         raise ValueError(f"unsupported recovery kind: {kind}")
