@@ -67,8 +67,9 @@ def test_first_ai_handoff_is_baseline_then_incremental(monkeypatch, tmp_path):
 
     delivery.ensure_delivery_artifact(first_run)
     baseline = json.loads(history.get_artifact(first_run, "ai_input")["content_text"])
-    assert baseline["schema_version"] == 2
+    assert baseline["schema_version"] == delivery.DELIVERY_SCHEMA_VERSION
     assert baseline["delivery_mode"] == "baseline"
+    assert baseline["location_ruleset"]
     assert baseline["summary"]["baseline_relevant"] == 1
     assert baseline["summary"]["ai_input_count"] == 1
     assert [j["external_id"] for j in baseline["jobs"]] == ["a"]
@@ -77,7 +78,7 @@ def test_first_ai_handoff_is_baseline_then_incremental(monkeypatch, tmp_path):
     second_run, history = _finalize_fetch(storage, run_history, [_job("a", desc_v2)])
     delivery.ensure_delivery_artifact(second_run)
     incremental = json.loads(history.get_artifact(second_run, "ai_input")["content_text"])
-    assert incremental["schema_version"] == 2
+    assert incremental["schema_version"] == delivery.DELIVERY_SCHEMA_VERSION
     assert incremental["delivery_mode"] == "incremental"
     assert incremental["summary"]["changed_relevant"] == 1
     assert incremental["summary"]["ai_input_count"] == 1
@@ -101,6 +102,8 @@ def test_migration_upgrades_existing_v1_runs_in_order(monkeypatch, tmp_path):
 
     first = json.loads(history.get_artifact(first_run, "ai_input")["content_text"])
     second = json.loads(history.get_artifact(second_run, "ai_input")["content_text"])
+    assert first["schema_version"] == delivery.DELIVERY_SCHEMA_VERSION
+    assert second["schema_version"] == delivery.DELIVERY_SCHEMA_VERSION
     assert first["delivery_mode"] == "baseline"
     assert first["summary"]["ai_input_count"] == 1
     assert second["delivery_mode"] == "incremental"

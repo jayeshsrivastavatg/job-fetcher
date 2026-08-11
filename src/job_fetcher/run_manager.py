@@ -39,10 +39,21 @@ class OperationManager:
         # A Python process cannot resume a previous process's worker thread. Mark
         # any leftover active rows explicitly instead of displaying them forever.
         self.store.interrupt_stale_runs()
-        # Schema-v1 AI artifacts were always incremental. Upgrade them in run order
-        # so the first actual App-2 handoff becomes a baseline without refetching.
-        ensure_all_delivery_artifacts()
         apply_settings(load_settings())
+
+        # Deterministic relevance hashes include the India-location ruleset version.
+        # This pass therefore reclassifies the existing inventory exactly once when
+        # location rules change, then becomes a cheap skip pass on later startups.
+        # Do it before rendering user-facing relevance pages so newly recognized
+        # Indian cities/aliases appear immediately without requiring another fetch.
+        try:
+            analyze_relevance(recompute_all=False)
+        except Exception:
+            traceback.print_exc()
+
+        # Upgrade historical AI artifacts after the current location rules are loaded.
+        # Old frozen snapshots are re-evaluated without re-fetching company sites.
+        ensure_all_delivery_artifacts()
 
     def active(self) -> dict[str, Any] | None:
         row = self.store.active_run()

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
+from job_fetcher.india_location import LOCATION_RULESET_VERSION, classify_india_location
 from job_fetcher.matching import dedup_group_key, description_similarity, job_source_hash, score_job
 from job_fetcher.profile import load_profile
 from job_fetcher.storage import RelevanceStore, JobStore
@@ -15,20 +17,65 @@ def _rowdict(row) -> dict[str, Any]:
 
 
 def _change_type(row: dict[str, Any], previous: dict[str, Any] | None, source_hash: str) -> str:
+    # Change events belong to the fetch/content lifecycle, not the scoring-rules
+    # lifecycle. A location-ruleset upgrade intentionally changes source_hash to
+    # force re-analysis, but must not make 15k unchanged jobs look CHANGED to the
+    # downstream incremental AI handoff.
     fetch_change = str(row.get("last_change_type") or "").lower()
-    if previous is None:
-        if fetch_change in {"new", "changed"}:
-            return fetch_change
-        return "baseline"
-    if previous.get("source_hash") != source_hash:
-        return "changed"
     if fetch_change in {"new", "changed", "unchanged", "baseline"}:
         return fetch_change
+    if previous is None:
+        return "baseline"
+    # Compatibility fallback for very old rows that predate last_change_type.
+    if previous.get("source_hash") != source_hash:
+        return "changed"
     return "unchanged"
 
 
+def _analysis_source_hash(row: dict[str, Any]) -> str:
+    """Version deterministic analysis so rule changes re-score existing jobs once."""
+    payload = f"{LOCATION_RULESET_VERSION}:{job_source_hash(row)}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _apply_location_policy(result: dict[str, Any], row: dict[str, Any], profile: dict[str, Any]) -> None:
+    raw = row.get("raw_json")
+    classification = classify_india_location(
+        row.get("location"),
+        description=row.get("description"),
+        raw=raw,
+    )
+    result["normalized_location"] = classification.normalized_location
+    breakdown = dict(result.get("score_breakdown") or {})
+    breakdown["locationClassification"] = {
+        "status": classification.status,
+        "countryCode": classification.country_code,
+        "evidence": classification.evidence,
+        "ruleset": LOCATION_RULESET_VERSION,
+    }
+    result["score_breakdown"] = breakdown
+
+    target = str((profile.get("candidate") or {}).get("targetCountry") or "").strip().lower()
+    if target != "india":
+        return
+    if classification.is_india:
+        return
+
+    # For this application an unverified location is not allowed to leak into the
+    # user-facing relevant set. We retain the job in the raw inventory for audit,
+    # but it cannot be relevant or reach the AI handoff until India is positively
+    # established from location/ATS metadata/JD location language.
+    result["hard_filtered"] = True
+    result["is_relevant"] = False
+    result["relevance_status"] = "filtered"
+    result["filter_reason"] = (
+        "location_outside_target" if classification.status == "foreign"
+        else "location_unverified_india"
+    )
+
+
 def analyze_relevance(*, recompute_all: bool = False, profile_path: str | Path | None = None) -> dict[str, Any]:
-    """Score active jobs using deterministic role, experience and skill rules."""
+    """Score active jobs using deterministic role, experience, skill and India-location rules."""
     profile = load_profile(profile_path)
     jobs = JobStore()
     relevance = RelevanceStore()
@@ -37,7 +84,7 @@ def analyze_relevance(*, recompute_all: bool = False, profile_path: str | Path |
     try:
         rows = [_rowdict(r) for r in jobs.all(active_only=True)]
         for row in rows:
-            source_hash = job_source_hash(row)
+            source_hash = _analysis_source_hash(row)
             previous = relevance.get(row["company_id"], row["external_id"])
             change = _change_type(row, previous, source_hash)
             if not recompute_all and previous and previous.get("source_hash") == source_hash:
@@ -46,6 +93,7 @@ def analyze_relevance(*, recompute_all: bool = False, profile_path: str | Path |
                 changes[change] = changes.get(change, 0) + 1
                 continue
             result = score_job(row, profile).to_dict()
+            _apply_location_policy(result, row, profile)
             relevance.upsert(row["company_id"], row["external_id"], source_hash, change, result)
             analyzed += 1
             changes[change] = changes.get(change, 0) + 1
