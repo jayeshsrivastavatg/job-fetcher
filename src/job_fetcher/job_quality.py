@@ -26,8 +26,8 @@ def prefer_usable_jobs(jobs):
     a real HTTP(S) detail/apply URL.
 
     If a source returns *only* incomplete records, preserve them rather than
-    silently converting the provider result into zero jobs; health verification
-    can then continue to flag that source as suspicious for investigation.
+    silently converting or collapsing the provider result; health verification can
+    then continue to flag that source as suspicious for investigation.
     """
     rows = list(jobs or [])
     if not rows:
@@ -48,4 +48,4 @@ def prefer_usable_jobs(jobs):
         if title and valid_http_url(getattr(job, "job_url", None)):
             usable.append(job)
 
-    return dedupe(usable if usable else rows)
+    return dedupe(usable) if usable else rows
