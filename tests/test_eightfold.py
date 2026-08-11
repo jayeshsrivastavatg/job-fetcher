@@ -104,6 +104,7 @@ def test_fetch_avoids_browser_when_static_page_is_complete(monkeypatch):
 
 
 def test_fetch_uses_browser_when_static_list_is_partial(monkeypatch):
+    monkeypatch.delenv("JOB_FETCHER_DISABLE_BROWSER", raising=False)
     static = [Job("twilio", "Twilio", "eightfold_html", "1", "Principal Engineer", "Remote - India", None,
                   "https://jobs.twilio.com/careers/job/1")]
     browser = [
