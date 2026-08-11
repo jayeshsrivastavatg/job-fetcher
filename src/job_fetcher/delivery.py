@@ -27,6 +27,13 @@ def _target_location_ok(job: dict[str, Any], normalized_location: str | None, pr
     if not target:
         return True
     if target == "india":
+        # The frozen normalized location contains the result of the deterministic
+        # relevance classifier, including India evidence that may originally have
+        # come only from structured ATS metadata. Historical job snapshots do not
+        # intentionally retain bulky raw ATS JSON, so preserve that already-frozen
+        # positive signal before re-checking the display/JD text.
+        if is_india_job(normalized_location):
+            return True
         return is_india_job(
             job.get("location"),
             description=job.get("description"),
