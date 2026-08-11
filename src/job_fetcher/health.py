@@ -11,10 +11,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import requests
 
+from job_fetcher.job_quality import prefer_usable_jobs, valid_http_url
 from job_fetcher.service import _discovered_endpoints, classify_error
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.http_client import session
@@ -67,18 +67,8 @@ def _browser_used(jobs) -> bool:
     return False
 
 
-def _valid_http_url(value: str | None) -> bool:
-    if not value:
-        return False
-    try:
-        p = urlparse(value)
-        return p.scheme in {"http", "https"} and bool(p.netloc)
-    except Exception:
-        return False
-
-
 def _sample_detail(jobs, timeout: float) -> tuple[str | None, bool | None, int | None, str | None]:
-    urls = [j.job_url for j in jobs if _valid_http_url(getattr(j, "job_url", None))]
+    urls = [j.job_url for j in jobs if valid_http_url(getattr(j, "job_url", None))]
     if not urls:
         return None, None, None, "no_valid_job_url"
 
@@ -120,7 +110,7 @@ def verify_company(company, previous_count: int | None, drop_threshold: float, v
     error = None
     category = None
     try:
-        jobs = adapter_obj.fetch(company)
+        jobs = prefer_usable_jobs(adapter_obj.fetch(company))
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         category = classify_error(exc)
@@ -143,7 +133,7 @@ def verify_company(company, previous_count: int | None, drop_threshold: float, v
     jobs = list(jobs or [])
     n = len(jobs)
     titles_valid = sum(bool((getattr(j, "title", None) or "").strip()) for j in jobs)
-    urls_valid = sum(_valid_http_url(getattr(j, "job_url", None)) for j in jobs)
+    urls_valid = sum(valid_http_url(getattr(j, "job_url", None)) for j in jobs)
     quality_ratio = round((min(titles_valid, urls_valid) / n) if n else 0.0, 4)
     browser_used = _browser_used(jobs)
     endpoints = _discovered_endpoints(jobs)
@@ -178,9 +168,14 @@ def verify_company(company, previous_count: int | None, drop_threshold: float, v
         status = "suspicious"
         category = "large_job_count_drop"
         error = f"Job count dropped from {previous_count} to {n} ({change_pct}%)"
+    elif validate_detail and sample_ok is False and sample_code in {401, 403, 429}:
+        # The listing data is structurally usable, but the one-off validator was
+        # denied by the site's WAF/rate limit. This is not evidence that the job
+        # URL is malformed, so distinguish it from a genuinely dead detail link.
+        status = "healthy_with_fallback"
+        category = "sample_detail_access_restricted"
+        error = f"HTTP {sample_code}; listing accepted, direct validation was blocked"
     elif validate_detail and sample_ok is False:
-        # Do not call the whole parser failed just because one detail URL is
-        # protected by a WAF. It is still a degraded signal worth investigating.
         status = "suspicious"
         category = "sample_job_detail_unreachable"
         error = sample_error
