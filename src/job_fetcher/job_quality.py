@@ -1,6 +1,46 @@
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import re
+from urllib.parse import parse_qs, urlparse
+
+
+_ROLE_TITLE_RE = re.compile(
+    r"\b(?:engineer|developer|manager|analyst|architect|scientist|designer|consultant|"
+    r"specialist|director|lead|intern|associate|recruiter|administrator|coordinator|"
+    r"executive|officer|principal|staff|head|counsel|attorney|accountant|controller|"
+    r"researcher|programmer|technologist|partner|representative|sre|sdet|devops|qa)\b",
+    re.I,
+)
+
+# These are common careers-site navigation/category labels that the old generic
+# extractor incorrectly stored as jobs simply because their URL contained
+# /careers/ or because the label contained a broad word such as "data", "sales"
+# or "support".
+_ACTION_ONLY = {
+    "apply", "apply now", "learn more", "read more", "see details", "view details",
+    "view role", "view job", "view jobs", "view all jobs", "browse jobs", "search jobs",
+    "see jobs", "explore jobs", "explore opportunities", "see open positions",
+}
+_NAVIGATION_EXACT = {
+    "jobs", "careers", "open roles", "open positions", "all jobs", "all teams",
+    "engineering", "sales", "support", "customer support", "products", "product",
+    "developers", "development", "marketing", "finance", "legal", "security",
+    "operations", "design", "data", "software", "ai and machine learning",
+    "candidate resources", "candidate resources hub", "career growth", "benefits and perks",
+    "awards", "talent community", "life at navi", "jobs at navi", "teams at navi",
+    "values at navi", "explore more", "contact sales", "contact support",
+}
+_NAVIGATION_RE = re.compile(
+    r"(?:\b(?:privacy|cookie|terms|policy)\b|\b(?:benefits?|perks?|awards?|resources?|"
+    r"teams?|culture|values?|products?|solutions?|developers?)\b|\blife\s+at\b|"
+    r"\bcandidate\s+resources?\b|\bcareer\s+growth\b|\bask questions,?\s*report bugs\b)",
+    re.I,
+)
+_HTMLISH_SOURCE_RE = re.compile(r"(?:^|_)(?:generic|browser|recovery_browser|official)_?html$|_html$", re.I)
+_JOB_QUERY_KEYS = {
+    "jobid", "job_id", "jid", "gh_jid", "reqid", "req_id", "requisitionid",
+    "requisition_id", "positionid", "position_id", "postingid", "posting_id",
+}
 
 
 def valid_http_url(value) -> bool:
@@ -11,6 +51,86 @@ def valid_http_url(value) -> bool:
         return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
     except Exception:
         return False
+
+
+def role_title_like(value) -> bool:
+    title = str(value or "").strip()
+    return bool(title and _ROLE_TITLE_RE.search(title))
+
+
+def strong_job_detail_url(value) -> bool:
+    """Return True only for a URL that looks like one concrete vacancy.
+
+    Bare /careers, /jobs and /openings pages are listing/navigation pages. A
+    concrete path segment after job/jobs/requisition/etc or an explicit requisition
+    query parameter is much stronger evidence that the link is an actual vacancy.
+    """
+    if not valid_http_url(value):
+        return False
+    parsed = urlparse(str(value))
+    path = re.sub(r"/+", "/", parsed.path or "/").rstrip("/").lower()
+    segments = [x for x in path.split("/") if x]
+    detail_markers = {"job", "jobs", "jobdetail", "requisition", "requisitions", "position", "positions", "opening", "openings", "vacancy", "vacancies", "details"}
+    generic_tail = {"search", "search-results", "all", "open", "list", "listing", "categories", "category"}
+
+    for index, segment in enumerate(segments):
+        if segment not in detail_markers or index >= len(segments) - 1:
+            continue
+        tail = segments[index + 1]
+        if tail and tail not in generic_tail:
+            return True
+
+    # Common branded forms that do not use a plain /jobs/<id> route.
+    if re.search(r"/careers?/details?/[^/]+$", path, re.I):
+        return True
+    if re.search(r"/careerhub/explore/jobs/[^/]+$", path, re.I):
+        return True
+
+    query = {k.lower() for k in parse_qs(parsed.query or "", keep_blank_values=True)}
+    if query & _JOB_QUERY_KEYS:
+        return True
+    fragment_query = {k.lower() for k in parse_qs(parsed.fragment or "", keep_blank_values=True)}
+    return bool(fragment_query & _JOB_QUERY_KEYS)
+
+
+def _looks_like_navigation_title(title: str) -> bool:
+    low = re.sub(r"\s+", " ", title.strip().casefold()).strip(" :–—-")
+    if not low:
+        return True
+    if low in _ACTION_ONLY or low in _NAVIGATION_EXACT:
+        return True
+    if low.startswith(("contact ", "explore ", "browse ", "discover ", "view all ", "learn ")):
+        return True
+    # A true role title such as "Privacy Engineer" or "Support Engineer" should
+    # survive even though it contains a word that also appears in site navigation.
+    return not role_title_like(title) and bool(_NAVIGATION_RE.search(title))
+
+
+def plausible_job(job) -> bool:
+    title = str(getattr(job, "title", "") or "").strip()
+    if not title:
+        return False
+
+    url = str(getattr(job, "job_url", "") or "").strip()
+    if title.casefold().strip(" :–—-") in _ACTION_ONLY:
+        return False
+
+    # A concrete vacancy URL is strong enough to keep even a short/unusual title.
+    if strong_job_detail_url(url):
+        return True
+
+    if _looks_like_navigation_title(title):
+        return False
+
+    source_type = str(getattr(job, "source_type", "") or "")
+    if _HTMLISH_SOURCE_RE.search(source_type):
+        # Generic HTML extraction is the dangerous case: require an actual role
+        # noun when the URL itself is not a concrete vacancy URL.
+        return role_title_like(title)
+
+    # Structured provider/API records are trusted unless they matched an explicit
+    # navigation/action rule above.
+    return True
 
 
 def _title_location(job):
@@ -39,18 +159,15 @@ def _dedupe_preserving_ids(jobs):
 
 
 def prefer_usable_jobs(jobs):
-    """Repair/drop duplicate extraction fragments without hiding unique bad rows.
+    """Remove obvious non-job navigation, repair URLs and dedupe fragments.
 
-    Browser and embedded-JSON extraction can discover the same requisition several
-    ways. A complete record may contain title/location/URL while a second fragment
-    contains the same requisition with no URL. We repair URL-shaped external IDs
-    and discard only incomplete rows that can be matched to an already usable row.
-
-    Unique incomplete records are deliberately preserved. That means source health
-    remains Suspicious until the adapter can produce a real URL instead of turning
-    the row green by silently throwing potentially real vacancies away.
+    The previous quality pass only asked whether a record had a title and a valid
+    URL. That allowed menu/footer links such as "Products", "Support", "All Teams"
+    and "Google Data Policy" to look perfectly healthy. We now reject only
+    high-confidence navigation false positives first, then preserve the earlier
+    conservative behavior for genuinely unique incomplete vacancies.
     """
-    rows = list(jobs or [])
+    rows = [job for job in list(jobs or []) if plausible_job(job)]
     if not rows:
         return []
 
