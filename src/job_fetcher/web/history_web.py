@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from job_fetcher.delivery import ensure_all_delivery_artifacts, ensure_delivery_artifact
 from job_fetcher.run_history import RunHistoryStore
 from job_fetcher.storage import RunStore
 from job_fetcher.web.app import TEMPLATES, _base_context
@@ -12,10 +14,27 @@ from job_fetcher.web.app import TEMPLATES, _base_context
 router = APIRouter()
 history = RunHistoryStore()
 
+
+def _ai_artifact(run_id: str):
+    ensure_delivery_artifact(str(run_id))
+    return history.get_artifact(str(run_id), "ai_input")
+
+
+def _artifact_mode(artifact) -> str:
+    if not artifact:
+        return ""
+    try:
+        return str(json.loads(artifact.get("content_text") or "{}").get("delivery_mode") or "")
+    except Exception:
+        return ""
+
+
 # Existing dashboard/runs templates can query lightweight history metadata without
-# changing their underlying FastAPI routes.
+# changing their underlying FastAPI routes. Artifact access also upgrades the old
+# v1 first-run handoff to the baseline contract when necessary.
 TEMPLATES.env.globals["run_history_summary"] = history.summary
-TEMPLATES.env.globals["run_ai_artifact"] = lambda run_id: history.get_artifact(str(run_id), "ai_input")
+TEMPLATES.env.globals["run_ai_artifact"] = _ai_artifact
+TEMPLATES.env.globals["run_ai_mode"] = lambda run_id: _artifact_mode(_ai_artifact(str(run_id)))
 
 
 def _optional_score(value: str) -> float | None:
@@ -48,6 +67,7 @@ def history_run_detail(
     if run["run_type"] != "fetch":
         return RedirectResponse(f"/runs/{run_id}", status_code=307)
 
+    ensure_delivery_artifact(run_id)
     min_score_value = _optional_score(min_score)
     if event not in {"", "new", "changed", "unchanged", "closed"}:
         event = ""
@@ -65,6 +85,7 @@ def history_run_detail(
     )
     summary = history.summary(run_id)
     artifact = history.get_artifact(run_id, "ai_input")
+    delivery_mode = _artifact_mode(artifact)
     companies = history.companies_for_run(run_id)
     params = {
         "q": q, "company": company, "event": event,
@@ -79,6 +100,7 @@ def history_run_detail(
         run=run,
         summary=summary,
         artifact=artifact,
+        delivery_mode=delivery_mode,
         jobs=result["rows"],
         result=result,
         companies=companies,
@@ -105,6 +127,7 @@ def historical_job_detail(request: Request, run_id: str, company: str, external_
 
 
 def _download(run_id: str, kind: str) -> Response:
+    ensure_delivery_artifact(run_id)
     artifact = history.get_artifact(run_id, kind)
     if not artifact:
         raise HTTPException(404, "This run predates immutable artifacts or artifact generation failed")
@@ -129,6 +152,7 @@ def download_manifest(run_id: str):
 
 @router.get("/history/latest/ai-input")
 def download_latest_ai_input():
+    ensure_all_delivery_artifacts()
     run_id = history.latest_artifact_run()
     if not run_id:
         raise HTTPException(404, "No finalized AI-input artifact exists yet")
@@ -140,6 +164,7 @@ def prepare_github_copy(run_id: str):
     run = RunStore().get_run(run_id)
     if not run:
         raise HTTPException(404, "Run not found")
+    ensure_delivery_artifact(run_id)
     try:
         history.prepare_git_copy(run_id)
     except FileNotFoundError as exc:
