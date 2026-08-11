@@ -9,7 +9,7 @@ from job_fetcher.sources.workday import WorkdaySource
 from job_fetcher.sources.oracle import OracleSource
 from job_fetcher.sources.eightfold import EightfoldSource
 from job_fetcher.sources.successfactors import SuccessFactorsSource
-from job_fetcher.sources.kula import KulaSource
+from job_fetcher.sources.kula_enriched import EnrichedKulaSource
 from job_fetcher.sources.apple import AppleSource
 from job_fetcher.sources.meta import MetaSource
 from job_fetcher.sources.amazon import AmazonSource
@@ -31,7 +31,7 @@ SOURCES = {
     "oracle": OracleSource,
     "eightfold": EightfoldSource,
     "successfactors": SuccessFactorsSource,
-    "kula": KulaSource,
+    "kula": EnrichedKulaSource,
     "apple": AppleSource,
     "meta": MetaSource,
     "amazon": AmazonSource,
