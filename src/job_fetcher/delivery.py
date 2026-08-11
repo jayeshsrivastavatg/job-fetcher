@@ -102,10 +102,12 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
 
         mode = "incremental" if _prior_delivery_exists(conn, run) else "baseline"
         rows = conn.execute(
-            '''SELECT s.*,v.snapshot_json
+            '''SELECT s.*,v.snapshot_json,current.raw_json AS matching_raw_json
                FROM run_job_snapshots s
                JOIN job_versions v ON v.company_id=s.company_id
                  AND v.external_id=s.external_id AND v.content_hash=s.content_hash
+               LEFT JOIN jobs current ON current.company_id=s.company_id
+                 AND current.external_id=s.external_id AND current.content_hash=s.content_hash
                WHERE s.run_id=?
                ORDER BY COALESCE(s.relevance_score,-1) DESC,s.company_name,s.title''',
             (run_id,),
@@ -120,8 +122,14 @@ def ensure_delivery_artifact(run_id: str) -> dict[str, Any] | None:
         ai_jobs: list[dict[str, Any]] = []
         for row in rows:
             job = json.loads(row["snapshot_json"])
+            # Old frozen snapshot JSON deliberately omitted bulky ATS raw data. If
+            # the exact content version still exists in the current jobs table, use
+            # its raw metadata only for location classification; do not export it.
+            location_job = dict(job)
+            if row["matching_raw_json"]:
+                location_job["raw_json"] = row["matching_raw_json"]
             relevant = bool(row["is_relevant"])
-            target_location = _target_location_ok(job, row["normalized_location"], profile)
+            target_location = _target_location_ok(location_job, row["normalized_location"], profile)
             observed = bool(row["observed"])
             event_type = str(row["event_type"])
             eligible_baseline = observed and relevant and target_location
