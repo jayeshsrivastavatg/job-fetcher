@@ -8,9 +8,12 @@ from job_fetcher.storage import RelevanceStore as BaseRelevanceStore, _connect
 class RelevanceStore(BaseRelevanceStore):
     """UI-oriented relevance queries with lifecycle/date filters.
 
-    The base relevance store owns persistence and analysis. This small extension
-    keeps web-only filtering concerns separate while reusing the same SQLite data.
+    User-facing relevance results are intentionally India-only. The raw jobs table
+    remains global for fetch diagnostics, but this page never leaks foreign or
+    unverified locations into the candidate workflow.
     """
+
+    INDIA_CLAUSE = "a.normalized_location LIKE '%India%'"
 
     def search(
         self, *, query: str = "", company_id: str = "", status: str = "", family: str = "",
@@ -18,7 +21,7 @@ class RelevanceStore(BaseRelevanceStore):
         posted_since: str = "", first_seen_since: str = "",
         page: int = 1, page_size: int = 50,
     ) -> dict[str, Any]:
-        clauses = ["j.active=1", "a.company_id IS NOT NULL"]
+        clauses = ["j.active=1", "a.company_id IS NOT NULL", self.INDIA_CLAUSE]
         args: list[Any] = []
         if query:
             like = f"%{query.strip()}%"
@@ -64,4 +67,55 @@ class RelevanceStore(BaseRelevanceStore):
         return {
             "rows": rows, "total": total, "page": page, "page_size": page_size,
             "pages": max(1, (total + page_size - 1) // page_size),
+        }
+
+    def stats(self) -> dict[str, Any]:
+        """India-only counts for the user-facing relevance dashboard cards."""
+        with _connect() as conn:
+            analyzed = int(conn.execute(
+                f'''SELECT COUNT(*) FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE}'''
+            ).fetchone()[0])
+            rows = conn.execute(
+                f'''SELECT a.relevance_status,COUNT(*) n FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE}
+                    GROUP BY a.relevance_status'''
+            ).fetchall()
+            relevant_count = int(conn.execute(
+                f'''SELECT COUNT(*) FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE} AND a.is_relevant=1'''
+            ).fetchone()[0])
+            relevant_new_changed = int(conn.execute(
+                f'''SELECT COUNT(*) FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE} AND a.is_relevant=1
+                      AND a.change_type IN ('new','changed')'''
+            ).fetchone()[0])
+            new_changed = int(conn.execute(
+                f'''SELECT COUNT(*) FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE}
+                      AND a.change_type IN ('new','changed')'''
+            ).fetchone()[0])
+            filter_rows = conn.execute(
+                f'''SELECT COALESCE(a.filter_reason,'unknown') reason,COUNT(*) n
+                    FROM job_relevance_analysis a JOIN jobs j
+                    ON j.company_id=a.company_id AND j.external_id=a.external_id
+                    WHERE j.active=1 AND {self.INDIA_CLAUSE} AND a.relevance_status='filtered'
+                    GROUP BY COALESCE(a.filter_reason,'unknown') ORDER BY n DESC'''
+            ).fetchall()
+        counts = {r["relevance_status"]: int(r["n"]) for r in rows}
+        filter_reasons = {r["reason"]: int(r["n"]) for r in filter_rows}
+        return {
+            "active_jobs": analyzed,
+            "analyzed": analyzed,
+            "pending": 0,
+            "relevant_jobs": relevant_count,
+            "relevant_new_changed": relevant_new_changed,
+            "new_changed": new_changed,
+            "statuses": counts,
+            "filter_reasons": filter_reasons,
         }
