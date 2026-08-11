@@ -3,7 +3,16 @@
 {% block heading %}Jobs{% endblock %}
 {% block eyebrow %}Collected job data{% endblock %}
 {% block content %}
-<section class="page-toolbar"><div><strong>{{ "{:,}".format(result.total) }}</strong> matching jobs</div></section>
+{% if request.query_params.get('reset') == '1' %}
+<section class="panel compact-panel" style="border-color:#d5ecdf;background:var(--green-soft);color:var(--green);">
+  <strong>Job data reset complete.</strong>
+  <span style="margin-left:6px;">Cleared {{ request.query_params.get('cleared', '0') }} collected job rows. Use Fetch All to rebuild from scratch.</span>
+</section>
+{% endif %}
+<section class="page-toolbar">
+  <div><strong>{{ "{:,}".format(result.total) }}</strong> matching jobs</div>
+  <a class="btn btn-danger-ghost" href="/jobs/reset">Clear all job data</a>
+</section>
 <section class="panel compact-panel">
 <form class="filters job-filters" method="get">
   <label class="search-field wide"><span class="sr-only">Search jobs</span><input name="q" value="{{ filters.q }}" placeholder="Search title, description, company…"></label>
@@ -25,6 +34,6 @@
   <span>Page {{ result.page }} of {{ result.pages }}</span>
   {% if result.page < result.pages %}<a class="btn btn-ghost" href="{{ next_url }}">Next →</a>{% endif %}
 </nav>
-{% else %}<div class="empty-state"><strong>No jobs match these filters.</strong><span>Try clearing one or more filters.</span><a class="text-link" href="/jobs">Clear filters</a></div>{% endif %}
+{% else %}<div class="empty-state"><strong>No jobs match these filters.</strong><span>{% if request.query_params.get('reset') == '1' %}Your job database is empty. Use Fetch All when you are ready for a clean scan.{% else %}Try clearing one or more filters.{% endif %}</span>{% if request.query_params.get('reset') != '1' %}<a class="text-link" href="/jobs">Clear filters</a>{% endif %}</div>{% endif %}
 </section>
 {% endblock %}
