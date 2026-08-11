@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
@@ -29,7 +28,7 @@ class WorkdaySource(JobSource):
     """Exhaustive public Workday CXS adapter with India-detail enrichment.
 
     The CXS listing endpoint exposes an exact `total` and paginated jobPostings,
-    which lets us prove listing completeness.  Listing rows intentionally omit the
+    which lets us prove listing completeness. Listing rows intentionally omit the
     full JD, so for India-facing vacancies we additionally fetch the corresponding
     public CXS detail endpoint and persist jobDescription/locations/metadata used by
     relevance scoring and the candidate UI.
@@ -39,7 +38,8 @@ class WorkdaySource(JobSource):
         src = company["source"]
         host, tenant, site = src["host"], src["tenant"], src["site"]
         locale = src.get("locale", "en-US")
-        api = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
+        cxs_base = f"https://{host}/wday/cxs/{tenant}/{site}"
+        api = f"{cxs_base}/jobs"
         s = session()
         out = []
         offset = 0
@@ -73,8 +73,6 @@ class WorkdaySource(JobSource):
             if not items or (total is not None and offset >= total) or offset >= max_jobs:
                 break
 
-        # If the provider reports more jobs than our explicit safety cap, do not
-        # silently pretend the result is complete. The live audit reads this marker.
         truncated = total is not None and len(out) < total
         for job in out:
             raw = dict(job.raw or {})
@@ -84,11 +82,15 @@ class WorkdaySource(JobSource):
             job.raw = raw
 
         if src.get("enrich_details", True):
-            self._enrich_india_details(out, api, workers=max(1, min(12, int(src.get("detail_workers") or 6))))
+            self._enrich_india_details(
+                out,
+                cxs_base,
+                workers=max(1, min(12, int(src.get("detail_workers") or 6))),
+            )
         return out
 
     @staticmethod
-    def _enrich_india_details(jobs, api: str, workers: int = 6):
+    def _enrich_india_details(jobs, cxs_base: str, workers: int = 6):
         targets = [
             job for job in jobs
             if _india_location(job.location)
@@ -100,7 +102,7 @@ class WorkdaySource(JobSource):
 
         def fetch_detail(job):
             ext = str(job.raw.get("_workday_external_path") or "")
-            url = urljoin(api.rstrip("/") + "/", ext.lstrip("/"))
+            url = cxs_base.rstrip("/") + "/" + ext.lstrip("/")
             try:
                 r = session().get(url, timeout=timeout_seconds(), headers={"Accept": "application/json"})
                 r.raise_for_status()
