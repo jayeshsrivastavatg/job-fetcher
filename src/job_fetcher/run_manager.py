@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import threading
 import traceback
 from typing import Any
@@ -103,13 +104,22 @@ class OperationManager:
                         jobs,
                     )
 
-                fetch_companies_detailed(
-                    companies,
-                    max_workers=settings["fetch_workers"],
-                    drop_threshold=settings["verification_drop_threshold"],
-                    on_result=lambda row: self.store.record_company_result(run_id, row),
-                    on_snapshot=record_snapshot,
+                fetch_kwargs = {
+                    "max_workers": settings["fetch_workers"],
+                    "drop_threshold": settings["verification_drop_threshold"],
+                    "on_result": lambda row: self.store.record_company_result(run_id, row),
+                }
+                # Keep compatibility with existing tests/custom wrappers that mock
+                # the older callback surface while using exact snapshot membership
+                # whenever the real fetch helper (or an updated wrapper) supports it.
+                signature = inspect.signature(fetch_companies_detailed)
+                supports_snapshot = "on_snapshot" in signature.parameters or any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()
                 )
+                if supports_snapshot:
+                    fetch_kwargs["on_snapshot"] = record_snapshot
+                fetch_companies_detailed(companies, **fetch_kwargs)
+
                 # Relevance analysis is local/deterministic and incremental. Once it
                 # succeeds we freeze the exact relevance state for this run and build
                 # the immutable AI-input artifact. A scoring/artifact problem does not
