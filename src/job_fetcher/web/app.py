@@ -17,6 +17,7 @@ from job_fetcher.config import find_company, load_config
 from job_fetcher.run_manager import RunConflict, get_manager
 from job_fetcher.settings import load_settings, save_settings
 from job_fetcher.storage import JobStore, RunStore, RelevanceStore, ROOT
+from job_fetcher.relevance_query import RelevanceStore
 from job_fetcher.relevance_service import analyze_relevance, relevance_stats
 from job_fetcher.profile import load_profile
 
@@ -43,6 +44,27 @@ def _date_since(days: int | None) -> str:
     if not days:
         return ""
     return (_now_utc() - timedelta(days=days)).date().isoformat()
+
+
+def _optional_float(value: str | None, field_name: str) -> float | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise HTTPException(400, f"{field_name} must be a number") from exc
+
+
+def _optional_iso_date(value: str | None, field_name: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    try:
+        datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(400, f"{field_name} must use YYYY-MM-DD") from exc
+    return raw
 
 
 def _result_dict(row):
@@ -265,12 +287,22 @@ def legacy_candidates_redirect():
 @app.get("/relevance", response_class=HTMLResponse)
 def relevance_page(
     request: Request, q: str = "", company: str = "", status: str = "", family: str = "",
-    change_type: str = "", relevant_only: bool = False, min_score: float | None = None, page: int = 1,
+    change_type: str = "", relevant_only: bool = False, min_score: str = "",
+    posted_since: str = "", first_seen_since: str = "", page: int = 1,
 ):
+    # HTML forms submit empty number/date fields as empty strings. Parse them here
+    # instead of asking FastAPI to coerce them before the route runs; otherwise a
+    # harmless blank min-score field produces a 422 response.
+    min_score_value = _optional_float(min_score, "min_score")
+    posted_since_value = _optional_iso_date(posted_since, "posted_since")
+    first_seen_since_value = _optional_iso_date(first_seen_since, "first_seen_since")
+
     store = RelevanceStore()
     result = store.search(
         query=q, company_id=company, status=status, family=family, change_type=change_type,
-        relevant_only=relevant_only, min_score=min_score, page=page, page_size=50,
+        relevant_only=relevant_only, min_score=min_score_value,
+        posted_since=posted_since_value, first_seen_since=first_seen_since_value,
+        page=page, page_size=50,
     )
     stats = store.stats()
     profile = load_profile()
@@ -279,7 +311,9 @@ def relevance_page(
     families.append(("software_engineering_general", "General Software Engineering"))
     params = {
         "q": q, "company": company, "status": status, "family": family, "change_type": change_type,
-        "relevant_only": "true" if relevant_only else "", "min_score": min_score if min_score is not None else "",
+        "relevant_only": "true" if relevant_only else "",
+        "min_score": min_score_value if min_score_value is not None else "",
+        "posted_since": posted_since_value, "first_seen_since": first_seen_since_value,
     }
     params = {k:v for k,v in params.items() if v not in (None, "", False)}
     prev_url = "/relevance?" + urlencode({**params, "page": max(1, result["page"]-1)})
@@ -287,7 +321,11 @@ def relevance_page(
     return TEMPLATES.TemplateResponse(request, "relevance.html", _base_context(
         request, jobs=[dict(r) for r in result["rows"]], result=result, stats=stats,
         companies=companies, families=families, profile=profile,
-        filters={"q":q,"company":company,"status":status,"family":family,"change_type":change_type,"relevant_only":relevant_only,"min_score":min_score},
+        filters={
+            "q":q,"company":company,"status":status,"family":family,"change_type":change_type,
+            "relevant_only":relevant_only,"min_score":min_score_value,
+            "posted_since":posted_since_value,"first_seen_since":first_seen_since_value,
+        },
         prev_url=prev_url,next_url=next_url,
     ))
 
