@@ -46,8 +46,25 @@ SOURCES = {
     "trakstar": TrakstarSource,
 }
 
-def build_source(company):
+
+def build_raw_source(company):
+    """Build exactly the adapter configured in companies.yaml."""
     source_type = company["source"]["type"]
     if source_type not in SOURCES:
         raise ValueError(f"Unsupported source type: {source_type}")
     return SOURCES[source_type]()
+
+
+def build_source(company):
+    """Return the configured adapter, enhanced with recovery where necessary.
+
+    Recovery wrappers subclass the configured adapter (AutoSource, EightfoldSource,
+    AtlassianSource or AvatureSource), so existing diagnostics/type expectations
+    remain valid while actual fetches get the hardened first-party fallback paths.
+    """
+    from job_fetcher.sources.recovery import has_recovery_plan
+
+    if has_recovery_plan(company):
+        from job_fetcher.sources.recovery_adapters import build_recovery_adapter
+        return build_recovery_adapter(company)
+    return build_raw_source(company)
