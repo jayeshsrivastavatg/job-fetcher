@@ -2,25 +2,33 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from job_fetcher.job_quality import prefer_usable_jobs
+from job_fetcher.job_quality import prefer_usable_jobs, valid_http_url
 from job_fetcher.sources.generic_extract import dedupe
 from job_fetcher.sources.recovery import RECOVERY_PLANS, RecoverySource
 
 
+def _result_score(jobs):
+    rows = list(jobs or [])
+    usable = sum(
+        bool(str(getattr(job, "title", "") or "").strip())
+        and valid_http_url(getattr(job, "job_url", None))
+        for job in rows
+    )
+    ratio = usable / len(rows) if rows else 0.0
+    # Completeness matters first: 100 valid jobs should beat 3 perfect featured
+    # cards. If valid counts tie, prefer the cleaner result.
+    return usable, ratio, len(rows)
+
+
 class BestRecoverySource(RecoverySource):
-    """Prefer the richest verified recovery result instead of the first nonzero one.
+    """Compare recovery paths and keep the most complete usable provider result.
 
-    A server-rendered landing page may expose only a handful of featured jobs while
-    the same first-party site exposes the complete result set after its public
-    browser/XHR application loads. The earlier recovery implementation returned on
-    the first nonzero result, which could turn a successful recovery into a partial
-    snapshot (for example a few featured jobs).
-
-    Structured provider adapters such as Greenhouse/SuccessFactors are already
-    complete paginated feeds, so they remain terminal on success. For HTML/browser
-    recovery attempts we try all configured public paths and retain the largest
-    usable result. The original configured adapter is used only when every recovery
-    attempt produced zero usable jobs or raised an error.
+    Server-rendered landing pages frequently expose only featured roles, while the
+    public browser/XHR application exposes the complete job set. We therefore do
+    not accept the first nonzero HTML result. Structured provider feeds such as
+    Greenhouse/SuccessFactors are terminal because they already expose complete
+    paginated job records. Other recoveries are compared with the configured
+    adapter and the result with the most usable title+URL records wins.
     """
 
     TRUSTED_STRUCTURED = {"greenhouse", "successfactors"}
@@ -39,38 +47,38 @@ class BestRecoverySource(RecoverySource):
             kind = str(attempt.get("kind") or "")
             adapter = self._adapter(kind)
             try:
-                jobs = prefer_usable_jobs(adapter.fetch(candidate))
+                jobs = list(prefer_usable_jobs(adapter.fetch(candidate)) or [])
             except Exception as exc:
                 errors.append(f"recovery[{index}] {kind}: {type(exc).__name__}: {exc}")
                 continue
 
-            jobs = list(jobs or [])
             if not jobs:
                 errors.append(f"recovery[{index}] {kind}: returned zero jobs")
                 continue
 
             if kind in self.TRUSTED_STRUCTURED:
-                return dedupe(jobs)
-            if len(jobs) > len(best):
+                return jobs
+            if _result_score(jobs) > _result_score(best):
                 best = jobs
 
-        if best:
-            return dedupe(best)
-
-        # All explicit recovery paths failed. Only now pay for the original
-        # configured adapter so its existing fallback behaviour remains available.
+        # Compare the original configured adapter too. A recovery page can be only
+        # a small featured subset; the original adapter may still produce a richer
+        # result on a particular network/run.
         try:
             primary = self.primary_source
             if primary is None:
                 from job_fetcher.sources.factory import build_raw_source
                 primary = build_raw_source(company)
-            jobs = prefer_usable_jobs(primary.fetch(company))
-            if jobs:
-                return dedupe(list(jobs))
-            errors.append("configured_source: returned zero jobs")
+            jobs = list(prefer_usable_jobs(primary.fetch(company)) or [])
+            if jobs and _result_score(jobs) > _result_score(best):
+                best = jobs
+            elif not jobs:
+                errors.append("configured_source: returned zero jobs")
         except Exception as exc:
             errors.append(f"configured_source: {type(exc).__name__}: {exc}")
 
+        if best:
+            return dedupe(best)
         raise RuntimeError(
             f"recovery_exhausted[{company_id}]: " + ("; ".join(errors) or "all sources returned zero jobs")
         )
