@@ -2,8 +2,6 @@ name: Bootstrap repository
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: write
@@ -13,10 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Expand verified baseline
+      - name: Decode and expand verified baseline
         run: |
-          unzip -o job-fetcher-github-baseline.zip
-          rm -f job-fetcher-github-baseline.zip .github/workflows/bootstrap.yml .github-seed
+          base64 --decode job-fetcher-github-baseline.zip > baseline.zip
+          unzip -o baseline.zip
+          rm -f baseline.zip job-fetcher-github-baseline.zip .github/workflows/bootstrap.yml .github-seed
       - name: Commit project baseline
         run: |
           git config user.name "github-actions[bot]"
