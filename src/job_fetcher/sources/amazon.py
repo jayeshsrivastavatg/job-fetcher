@@ -154,6 +154,14 @@ class AmazonSource(JobSource):
         for payload in payloads:
             for j in extract_jobs_from_json(company, payload, final_url, "amazon_browser_json"):
                 j.source_type = "amazon"
+                # Amazon browser payloads sometimes include the numeric requisition
+                # id but omit the redundant detail URL. The public detail route is
+                # stable, so reconstruct it rather than storing a title-only row.
+                if not j.job_url and j.external_id and str(j.external_id).isdigit():
+                    j.job_url = f"https://www.amazon.jobs/en/jobs/{j.external_id}/"
+                    raw = dict(j.raw or {}) if isinstance(j.raw, dict) else {}
+                    raw["_canonical_job_url_reconstructed"] = True
+                    j.raw = raw
                 jobs.append(j)
         jobs = dedupe(jobs)
         if not jobs:
