@@ -81,8 +81,7 @@ class UberJobsApiSource(JobSource):
             raise RuntimeError("uber_jobs_api_invalid_totals")
 
         rows = list(first.get("jobs") or [])
-        expected_page = 1
-        if int(first.get("page") or 1) != expected_page:
+        if int(first.get("page") or 1) != 1:
             raise RuntimeError("uber_jobs_api_unexpected_page")
 
         for page in range(2, total_pages + 1):
@@ -142,6 +141,26 @@ class AtlassianListingsApiSource(JobSource):
             return None
         return f"{portal_id or 'unknown'}:{job_id}"
 
+    @classmethod
+    def unique_rows(cls, rows: list[dict]) -> dict[str, dict]:
+        """Collapse repeated UI rows that point at the same portal requisition."""
+        by_key: dict[str, dict] = {}
+        for row in rows:
+            key = cls.record_key(row)
+            if not key:
+                raise RuntimeError("atlassian_listing_record_without_identity")
+            previous = by_key.get(key)
+            if previous is None:
+                by_key[key] = row
+                continue
+            # Same portal + requisition is the same vacancy, even if the all-jobs
+            # payload repeats it for multiple UI facets. Keep the richer copy.
+            previous_size = sum(len(str(previous.get(field) or "")) for field in ("overview", "responsibilities", "qualifications"))
+            current_size = sum(len(str(row.get(field) or "")) for field in ("overview", "responsibilities", "qualifications"))
+            if current_size > previous_size:
+                by_key[key] = row
+        return by_key
+
     @staticmethod
     def _job(company: dict, row: dict) -> Job:
         key = AtlassianListingsApiSource.record_key(row)
@@ -168,30 +187,17 @@ class AtlassianListingsApiSource(JobSource):
         )
 
     def fetch(self, company: dict) -> list[Job]:
-        rows = self._rows()
-        start_keys = {key for row in rows if (key := self.record_key(row))}
-        if len(start_keys) != len(rows):
-            raise RuntimeError(f"atlassian_listing_missing_or_duplicate_identity:{len(start_keys)}/{len(rows)}")
-
+        start_rows = self._rows()
+        start = self.unique_rows(start_rows)
         end_rows = self._rows()
-        end_keys = {key for row in end_rows if (key := self.record_key(row))}
-        if len(end_keys.symmetric_difference(start_keys)) > 2:
+        end = self.unique_rows(end_rows)
+        if len(set(end).symmetric_difference(start)) > 2:
             raise RuntimeError("atlassian_listings_board_changed_during_fetch")
-
-        by_key = {self.record_key(row): row for row in end_rows}
-        return [self._job(company, row) for key, row in by_key.items() if key]
+        return [self._job(company, row) for row in end.values()]
 
 
 class NaviOfficialCareersSource(JobSource):
-    """Fail closed until Navi exposes an approved enumerable vacancy feed.
-
-    Navi's branded careers URLs currently present a managed access challenge to
-    automated clients. The old Freshteam board is reachable but advertises zero
-    jobs, while current hiring links observed publicly resolve to LinkedIn. This
-    project deliberately does not automate LinkedIn or bypass access controls.
-    Returning zero or falling back to generic HTML here would make the dataset look
-    complete when it cannot be proven complete, so the source is explicitly blocked.
-    """
+    """Fail closed until Navi exposes an approved enumerable vacancy feed."""
 
     def fetch(self, company: dict) -> list[Job]:
         raise RuntimeError(
