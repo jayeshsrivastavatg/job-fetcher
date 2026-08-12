@@ -17,10 +17,10 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
 
     Exact mode therefore performs several complete row-space walks and unions every
     stable position ID it sees. For very large/high-churn boards (currently
-    Microsoft), each walk also overlaps adjacent provider pages by 50%. That makes
-    an insertion/removal at an earlier offset unable to create a silent hole at a
-    normal 10-row page boundary. Each individual walk must still reach the entire
-    provider-reported row space or it fails closed.
+    Microsoft and Morgan Stanley), each walk also overlaps adjacent provider pages
+    by 50%. That makes an insertion/removal at an earlier offset unable to create a
+    silent hole at a normal 10-row page boundary. Each individual walk must still
+    reach the entire provider-reported row space or it fails closed.
 
     We intentionally do *not* wait for the board to stop changing: employers can
     add/remove jobs continuously. The independent exact verifier brackets production
@@ -106,9 +106,9 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             raw_rows += len(rows)
             furthest_covered_offset = max(furthest_covered_offset, start + len(rows))
 
-            # Eightfold currently returns at most ten rows. On Microsoft we use a
-            # five-row stride, intentionally re-reading half of every adjacent page.
-            # For normal boards stride equals page size, preserving the cheaper walk.
+            # Eightfold currently returns at most ten rows. On large/high-churn
+            # boards we use a five-row stride, intentionally re-reading half of
+            # every adjacent page so live offset shifts cannot create a boundary hole.
             step = min(len(rows), max(1, int(self._page_stride)))
             start += step
             if pages > 10000:
@@ -142,11 +142,16 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
     def enumerate_rows(self, company: dict) -> tuple[dict[str, dict], dict]:
         origin, domain, _entry = self.contract(company)
 
-        # Microsoft is both very large and highly active. Its result ordering moves
-        # enough during a full walk that non-overlapping offsets were empirically
-        # shown to omit stable vacancies. Half-page overlap removes that boundary
-        # failure mode while the multi-pass union handles wider live-board mutation.
-        self._page_stride = max(1, self.page_size // 2) if company.get("id") == "microsoft" else self.page_size
+        # Microsoft and Morgan Stanley are both large, active boards. Their result
+        # ordering can move enough during a full walk that non-overlapping offsets
+        # omit stable vacancies. Half-page overlap removes that boundary failure
+        # mode while the multi-pass union handles wider live-board mutation.
+        overlap_company_ids = {"microsoft", "morgan_stanley"}
+        self._page_stride = (
+            max(1, self.page_size // 2)
+            if company.get("id") in overlap_company_ids
+            else self.page_size
+        )
 
         by_id: dict[str, dict] = {}
         passes: list[dict] = []
