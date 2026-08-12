@@ -55,8 +55,7 @@ def test_servicenow_supplements_provider_when_official_site_has_missing_job(monk
     )
 
     monkeypatch.setattr(servicenow_module.SmartRecruitersSource, "fetch", lambda self, c: [provider_job])
-    monkeypatch.setattr(ServiceNowSource, "_enumerate_official_site", lambda self: (website, 2))
-    monkeypatch.setattr(ServiceNowSource, "_official_total", lambda self: 2)
+    monkeypatch.setattr(ServiceNowSource, "_enumerate_official_site", lambda self: (website, 2, 2))
     monkeypatch.setattr(ServiceNowSource, "_fetch_official_detail", lambda self, c, r: supplement)
 
     jobs = ServiceNowSource().fetch(company)
@@ -70,9 +69,19 @@ def test_servicenow_fails_closed_when_official_site_enumeration_is_partial(monke
     monkeypatch.setattr(
         ServiceNowSource,
         "_enumerate_official_site",
-        lambda self: ({"744000000000001": {"id": "744000000000001", "title": "Engineer", "url": "https://x/jobs/744000000000001/x/"}}, 2),
+        lambda self: ({"744000000000001": {"id": "744000000000001", "title": "Engineer", "url": "https://x/jobs/744000000000001/x/"}}, 2, 2),
     )
 
     import pytest
     with pytest.raises(RuntimeError, match="servicenow_website_incomplete_pagination"):
+        ServiceNowSource().fetch(company)
+
+
+def test_servicenow_fails_closed_when_board_changes_during_fetch(monkeypatch):
+    company = _company("servicenow")
+    monkeypatch.setattr(servicenow_module.SmartRecruitersSource, "fetch", lambda self, c: [])
+    monkeypatch.setattr(ServiceNowSource, "_enumerate_official_site", lambda self: ({}, 470, 471))
+
+    import pytest
+    with pytest.raises(RuntimeError, match="servicenow_website_changed_during_fetch"):
         ServiceNowSource().fetch(company)
