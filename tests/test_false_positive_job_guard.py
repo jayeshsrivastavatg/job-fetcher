@@ -49,6 +49,31 @@ def test_keeps_real_role_titles_even_when_they_contain_navigation_words():
     assert [job.title for job in prefer_usable_jobs(jobs)] == [job.title for job in jobs]
 
 
+def test_authoritative_provider_postings_are_not_filtered_as_navigation():
+    # Once an adapter is reading an authoritative provider's vacancy collection,
+    # short titles that resemble careers-site categories are still real published
+    # requisitions. The navigation guard belongs to HTML/link discovery, not these
+    # provider feeds.
+    jobs = [
+        _job("Security", "https://jobs.ashbyhq.com/acme/abc", source="ashby"),
+        _job("Support", "https://api.smartrecruiters.com/v1/companies/Acme/postings/123", source="smartrecruiters"),
+        _job("Finance", "https://acme.wd1.myworkdayjobs.com/en-US/External/job/Test_R1", source="workday"),
+        _job("Legal", "https://boards.greenhouse.io/acme/jobs/123", source="greenhouse"),
+        _job("Operations", "https://jobs.lever.co/acme/123", source="lever"),
+    ]
+    assert [job.title for job in prefer_usable_jobs(jobs)] == [job.title for job in jobs]
+
+
+def test_same_short_labels_still_fail_for_generic_html():
+    assert prefer_usable_jobs([
+        _job("Security"),
+        _job("Support"),
+        _job("Finance"),
+        _job("Legal"),
+        _job("Operations"),
+    ]) == []
+
+
 def test_concrete_job_url_keeps_unusual_but_valid_title():
     job = _job("Chief of Staff", "https://example.com/jobs/12345-chief-of-staff")
     assert plausible_job(job) is True
