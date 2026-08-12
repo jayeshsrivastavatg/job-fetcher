@@ -65,14 +65,19 @@ def build_source(company):
     """
     company_id = str(company.get("id") or "")
 
-    # Phase 2 exact sources use the first-party JSON inventories that power the
-    # employers' own careers pages. They are exhaustive and have stable IDs, so do
-    # not route these companies through generic HTML/browser recovery.
-    if company_id in {"uber", "atlassian"}:
-        from job_fetcher.sources.phase2_exact import UberJobsApiSource, AtlassianListingsApiSource
+    # Phase 2 exact sources use first-party inventories when one is enumerable.
+    # Navi is intentionally fail-closed: its branded careers surface is access
+    # restricted and no approved enumerable first-party feed has been identified.
+    if company_id in {"uber", "atlassian", "navi"}:
+        from job_fetcher.sources.phase2_exact import (
+            AtlassianListingsApiSource,
+            NaviOfficialCareersSource,
+            UberJobsApiSource,
+        )
         return {
             "uber": UberJobsApiSource,
             "atlassian": AtlassianListingsApiSource,
+            "navi": NaviOfficialCareersSource,
         }[company_id]()
 
     # Cohesity publishes the complete grouped inventory used by its own careers UI
