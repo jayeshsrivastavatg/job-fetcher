@@ -5,10 +5,10 @@ import pytest
 from job_fetcher.sources.eightfold_pcsx_exhaustive import EightfoldPcsxExhaustiveSource
 
 
-def _company():
+def _company(company_id="morgan_stanley"):
     return {
-        "id": "morgan_stanley",
-        "name": "Morgan Stanley",
+        "id": company_id,
+        "name": company_id,
         "career_url": "https://jobs.example.com/careers?domain=example.com&hl=en",
         "source": {
             "type": "eightfold",
@@ -31,9 +31,6 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     source = EightfoldPcsxExhaustiveSource()
     passes = {"number": 0}
 
-    # The provider reports four result rows, but ID 2 appears twice. That is three
-    # vacancies. Exact mode performs three complete row-space walks and merges the
-    # duplicate location information without treating the repeated row as missing.
     def fake_page(origin, domain, start):
         if start == 0:
             passes["number"] += 1
@@ -57,15 +54,34 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     assert rows["2"]["locations"] == ["Mumbai, India", "Bengaluru, India"]
 
 
+def test_microsoft_uses_half_page_overlap_to_close_offset_shift_holes(monkeypatch):
+    source = EightfoldPcsxExhaustiveSource()
+    source._full_passes = 2
+    starts = []
+
+    # Ten-row provider pages with a 5-row Microsoft stride. The second request
+    # intentionally overlaps IDs 6-10 from the first request before moving on.
+    all_rows = [_row(i, "India") for i in range(1, 16)]
+
+    def fake_page(origin, domain, start):
+        starts.append(start)
+        return all_rows[start : start + 10], len(all_rows)
+
+    monkeypatch.setattr(source, "_page", fake_page)
+    rows, evidence = source.enumerate_rows(_company("microsoft"))
+
+    assert set(rows) == {str(i) for i in range(1, 16)}
+    assert evidence["page_stride"] == 5
+    assert evidence["pagination_exhausted"] is True
+    assert starts[:3] == [0, 5, 10]
+    assert evidence["furthest_covered_offset"] >= 15
+
+
 def test_multi_pass_union_recovers_job_hidden_by_live_offset_shift(monkeypatch):
     source = EightfoldPcsxExhaustiveSource()
     source._full_passes = 3
     snapshots = [
-        # First walk looks complete by row count but misses stable ID 4 because the
-        # board shifted while offsets were being traversed.
         {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK")},
-        # A later full walk exposes ID 4. ID 1 is absent from this one pass, which
-        # is fine because extras/union are intentional.
         {"2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
         {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
     ]
@@ -82,6 +98,8 @@ def test_multi_pass_union_recovers_job_hidden_by_live_offset_shift(monkeypatch):
             "duplicate_ids": {},
             "duplicate_row_occurrences": 0,
             "pages_requested": 1,
+            "furthest_covered_offset": len(rows),
+            "page_stride": source.page_size,
         }
 
     monkeypatch.setattr(source, "_walk_exact_once", fake_walk)
@@ -111,6 +129,8 @@ def test_continuously_mutating_board_returns_bounded_union_with_evidence(monkeyp
             "duplicate_ids": {},
             "duplicate_row_occurrences": 0,
             "pages_requested": 1,
+            "furthest_covered_offset": 1,
+            "page_stride": source.page_size,
         }
 
     monkeypatch.setattr(source, "_walk_exact_once", fake_walk)
