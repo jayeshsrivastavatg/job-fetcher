@@ -3,6 +3,7 @@ name: Phase 1 Exact Production Coverage
 on:
   push:
     branches:
+      - main
       - fix/phase1-exact-website-coverage
   workflow_dispatch:
 
