@@ -147,10 +147,61 @@ def test_india_job_is_hydrated_but_listing_survives_detail_failure(monkeypatch):
     assert jobs[0].description == "Build distributed systems."
     assert jobs[0].source_type == "eightfold_pcsx"
     assert jobs[0].raw["_pcsx_detail_hydrated"] is True
+    assert jobs[0].raw["_pcsx_description_source"] == "position_details"
 
     monkeypatch.setattr(source, "_detail", lambda *args: None)
+    monkeypatch.setattr(source, "_description_from_public_page", lambda *args: None)
     jobs = source.fetch(_company())
     assert len(jobs) == 1
     assert jobs[0].external_id == "7"
     assert jobs[0].description is None
     assert jobs[0].raw["_pcsx_detail_hydrated"] is False
+    assert jobs[0].raw["_pcsx_description_source"] == "missing"
+
+
+def test_position_details_accepts_public_eightfold_description_variants(monkeypatch):
+    source = EightfoldPcsxSource()
+    india = _row(8, "Software Engineer", "Bengaluru, Karnataka, India")
+    monkeypatch.setattr(source, "enumerate_rows", lambda company: (
+        {"8": india},
+        {"origin": "https://jobs.example.com", "domain": "example.com", "reported_count": 1, "unique_count": 1, "pagination_exhausted": True, "pages_requested": 1},
+    ))
+    monkeypatch.setattr(source, "_detail", lambda *args: {
+        **india,
+        "descriptionPlain": "Build reliable communications systems.",
+    })
+    monkeypatch.setattr(
+        source,
+        "_description_from_public_page",
+        lambda *args: pytest.fail("public page fallback should not be needed"),
+    )
+
+    jobs = source.fetch(_company())
+
+    assert jobs[0].description == "Build reliable communications systems."
+    assert jobs[0].raw["_pcsx_detail_hydrated"] is True
+    assert jobs[0].raw["_pcsx_description_source"] == "position_details"
+
+
+def test_public_job_page_jsonld_fills_last_resort_jd(monkeypatch):
+    source = EightfoldPcsxSource()
+    india = _row(9, "Software Engineer", "Bengaluru, Karnataka, India")
+    monkeypatch.setattr(source, "enumerate_rows", lambda company: (
+        {"9": india},
+        {"origin": "https://jobs.example.com", "domain": "example.com", "reported_count": 1, "unique_count": 1, "pagination_exhausted": True, "pages_requested": 1},
+    ))
+    monkeypatch.setattr(source, "_detail", lambda *args: {**india})
+
+    class Response:
+        text = '''<html><script type="application/ld+json">{"@type":"JobPosting","title":"Software Engineer","description":"<p>Own production services.</p>"}</script></html>'''
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(source._client, "get", lambda *args, **kwargs: Response())
+
+    jobs = source.fetch(_company())
+
+    assert jobs[0].description == "Own production services."
+    assert jobs[0].raw["_pcsx_detail_hydrated"] is True
+    assert jobs[0].raw["_pcsx_description_source"] == "public_job_page"
