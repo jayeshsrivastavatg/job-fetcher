@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from job_fetcher.config import load_config
 from job_fetcher.job_quality import prefer_usable_jobs
 from job_fetcher.sources.eightfold_pcsx import EightfoldPcsxSource
+from job_fetcher.sources.eightfold_pcsx_exhaustive import EightfoldPcsxExhaustiveSource
 from job_fetcher.sources.factory import build_source
 
 TARGETS = {"microsoft", "twilio", "morgan_stanley"}
@@ -22,13 +23,18 @@ def utcnow() -> str:
 
 
 def official_snapshot(company: dict) -> dict:
-    source = EightfoldPcsxSource()
+    source = EightfoldPcsxExhaustiveSource()
     rows, evidence = source.enumerate_rows(deepcopy(company))
     return {
         "ids": set(rows),
         "count": len(rows),
         "reported_count": int(evidence["reported_count"]),
+        "provider_row_count": int(evidence.get("provider_row_count") or 0),
+        "duplicate_row_occurrences": int(evidence.get("duplicate_row_occurrences") or 0),
+        "duplicate_id_count": int(evidence.get("duplicate_id_count") or 0),
+        "duplicate_ids_sample": evidence.get("duplicate_ids_sample") or {},
         "pagination_exhausted": bool(evidence["pagination_exhausted"]),
+        "passes": int(evidence.get("passes") or 1),
         "pages_requested": int(evidence["pages_requested"]),
         "origin": evidence["origin"],
         "domain": evidence["domain"],
@@ -62,7 +68,11 @@ def browser_witness(company: dict) -> dict:
                 captured.update({
                     "url": url,
                     "count": int(data.get("count") or 0),
-                    "ids": [str(row.get("id")) for row in positions if isinstance(row, dict) and row.get("id") is not None],
+                    "ids": [
+                        str(row.get("id"))
+                        for row in positions
+                        if isinstance(row, dict) and row.get("id") is not None
+                    ],
                 })
             except Exception:
                 return
@@ -91,14 +101,17 @@ def app_snapshot(company: dict) -> dict:
         if str(getattr(job, "external_id", "") or "").strip()
     }
     india = [
-        job for job in jobs
+        job
+        for job in jobs
         if "india" in str(getattr(job, "location", "") or "").casefold()
         or any(
             token.strip().upper() == "IN" or token.strip().upper().endswith(", IN")
             for token in (getattr(job, "raw", None) or {}).get("standardizedLocations", [])
         )
     ]
-    india_with_jd = sum(bool(str(getattr(job, "description", "") or "").strip()) for job in india)
+    india_with_jd = sum(
+        bool(str(getattr(job, "description", "") or "").strip()) for job in india
+    )
     return {
         "adapter": type(source).__name__,
         "ids": ids,
@@ -119,13 +132,14 @@ def verify(company: dict) -> dict:
     witness_still_current = set(witness["ids"]) & after["ids"]
     missing_witness = witness_still_current - app["ids"]
 
-    # Count drift is expected on an active jobs board. The exact invariant is set
-    # coverage: every vacancy that remained current across the verification window,
-    # plus every browser-witness vacancy still current at the end, must exist in
-    # actual production output. Extras are explicitly allowed.
+    # `data.count` is a result-row count. Some Eightfold boards legitimately repeat
+    # one vacancy ID in multiple rows, so exact completeness is based on the stable
+    # vacancy-ID set *after* proving every result-row offset was exhausted.
     passed = (
         before["pagination_exhausted"]
         and after["pagination_exhausted"]
+        and before["provider_row_count"] >= before["reported_count"]
+        and after["provider_row_count"] >= after["reported_count"]
         and not missing
         and not missing_witness
         and witness["url"].startswith(f"{before['origin']}/api/pcsx/search")
@@ -137,10 +151,16 @@ def verify(company: dict) -> dict:
         "verdict": "CERTIFIED" if passed else "FAILED",
         "passed": passed,
         "production_adapter": app["adapter"],
-        "official_before_unique": before["count"],
-        "official_before_reported": before["reported_count"],
-        "official_after_unique": after["count"],
-        "official_after_reported": after["reported_count"],
+        "official_before_unique_vacancies": before["count"],
+        "official_before_reported_rows": before["reported_count"],
+        "official_before_rows_exhausted": before["provider_row_count"],
+        "official_before_duplicate_rows": before["duplicate_row_occurrences"],
+        "official_before_duplicate_id_count": before["duplicate_id_count"],
+        "official_before_duplicate_ids_sample": before["duplicate_ids_sample"],
+        "official_after_unique_vacancies": after["count"],
+        "official_after_reported_rows": after["reported_count"],
+        "official_after_rows_exhausted": after["provider_row_count"],
+        "official_after_duplicate_rows": after["duplicate_row_occurrences"],
         "stable_current_jobs_checked": len(stable_current),
         "production_jobs": app["count"],
         "missing_count": len(missing),
@@ -149,9 +169,13 @@ def verify(company: dict) -> dict:
         "browser_witness_count": witness["count"],
         "browser_witness_first_page_ids": witness["ids"],
         "browser_witness_missing_if_still_current": sorted(missing_witness),
-        "browser_called_expected_inventory": witness["url"].startswith(f"{before['origin']}/api/pcsx/search"),
+        "browser_called_expected_inventory": witness["url"].startswith(
+            f"{before['origin']}/api/pcsx/search"
+        ),
         "pagination_exhausted_before": before["pagination_exhausted"],
         "pagination_exhausted_after": after["pagination_exhausted"],
+        "passes_before": before["passes"],
+        "passes_after": after["passes"],
         "pages_requested_before": before["pages_requested"],
         "pages_requested_after": after["pages_requested"],
         "india_jobs": app["india_count"],
@@ -170,7 +194,10 @@ def main() -> int:
     print(
         f"{row['company']}: verdict={row['verdict']} production={row['production_jobs']} "
         f"stable_official={row['stable_current_jobs_checked']} missing={row['missing_count']} "
-        f"browser_count={row['browser_witness_count']} india_jd={row['india_jobs_with_full_description']}/{row['india_jobs']}",
+        f"browser_count={row['browser_witness_count']} "
+        f"rows={row['official_after_rows_exhausted']}/{row['official_after_reported_rows']} "
+        f"duplicate_rows={row['official_after_duplicate_rows']} "
+        f"india_jd={row['india_jobs_with_full_description']}/{row['india_jobs']}",
         flush=True,
     )
     for job_id in row["missing_ids"][:30]:
