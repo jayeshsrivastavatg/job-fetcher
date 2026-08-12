@@ -9,6 +9,7 @@ from copy import deepcopy
 # straight to that provider instead of re-discovering it through generic HTML.
 KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "postman": {"type": "greenhouse", "board_token": "postman"},
+    "razorpay": {"type": "greenhouse", "board_token": "razorpaysoftwareprivatelimited"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
     "hackerrank": {"type": "greenhouse", "board_token": "hackerrank"},
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
