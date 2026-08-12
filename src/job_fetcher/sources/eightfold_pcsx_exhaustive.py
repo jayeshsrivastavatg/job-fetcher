@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from copy import deepcopy
 
 from job_fetcher.sources.eightfold_pcsx import EightfoldPcsxSource
@@ -40,7 +41,27 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             2,
             int(os.getenv("JOB_FETCHER_EIGHTFOLD_FULL_PASSES", "3")),
         )
+        self._detail_attempts = max(
+            1,
+            int(os.getenv("JOB_FETCHER_EIGHTFOLD_DETAIL_ATTEMPTS", "3")),
+        )
         self._page_stride = self.page_size
+
+    def _detail(self, origin: str, domain: str, position_id: str):
+        """Retry bounded detail hydration without ever dropping the vacancy.
+
+        The base adapter deliberately keeps a listing row when a detail request
+        fails. Exact mode keeps that inventory behavior, but retries transient
+        detail failures so India jobs handed to the AI stage are not needlessly
+        missing their JD text.
+        """
+        for attempt in range(self._detail_attempts):
+            detail = super()._detail(origin, domain, position_id)
+            if isinstance(detail, dict) and detail:
+                return detail
+            if attempt + 1 < self._detail_attempts:
+                time.sleep(min(2 ** attempt, 4))
+        return None
 
     @staticmethod
     def _merge_list(left, right):
