@@ -10,32 +10,31 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
     """Exact PCS inventory walker with row-vs-vacancy semantics.
 
     Eightfold's ``data.count`` is a result-row count, not necessarily a unique
-    requisition count. Large live boards can also mutate while offset pagination is
-    in progress. A posting inserted/removed near the front shifts later offsets and
-    can make one complete-looking pass omit a vacancy even though every offset was
-    requested.
+    requisition count. Large live boards can mutate while offset pagination is in
+    progress. A posting inserted/removed near the front shifts later offsets and
+    can make one apparently complete pass omit a vacancy even though every offset
+    was requested.
 
-    We therefore prove two independent properties:
-    1. every provider result-row offset is consumed on every pass; and
-    2. the union of stable vacancy IDs converges across repeated *full* passes.
+    Exact mode therefore performs several complete row-space walks and unions every
+    stable position ID it sees. Each individual walk must still exhaust the full
+    provider-reported row space or it fails closed. We intentionally do *not* wait
+    for the board to stop changing: employers such as Microsoft can add/remove jobs
+    continuously, making a global quiescent snapshot impossible. The independent
+    exact verifier brackets production with separate official snapshots and only
+    requires IDs that are present across the verification window.
 
-    The source requires consecutive full passes that add no previously unseen
-    vacancy IDs before publishing the snapshot. This deliberately prefers extra
-    recently-closed IDs over silently missing a still-current vacancy, matching the
-    product trust rule: extras are acceptable; missing jobs are not.
+    This deliberately prefers a few extras from adjacent snapshots over silently
+    missing a current vacancy, matching the product trust rule: extras are allowed;
+    missing current jobs are not.
     """
 
     source_type = "eightfold_pcsx"
 
     def __init__(self):
         super().__init__()
-        self._max_convergence_passes = max(
-            3,
-            int(os.getenv("JOB_FETCHER_EIGHTFOLD_MAX_CONVERGENCE_PASSES", "6")),
-        )
-        self._stable_passes_required = max(
-            1,
-            int(os.getenv("JOB_FETCHER_EIGHTFOLD_STABLE_PASSES", "2")),
+        self._full_passes = max(
+            2,
+            int(os.getenv("JOB_FETCHER_EIGHTFOLD_FULL_PASSES", "3")),
         )
 
     @staticmethod
@@ -103,6 +102,8 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             if pages > 10000:
                 raise RuntimeError("eightfold_pcsx_pagination_guard")
 
+        # ``count`` is the number of result rows, not the number of unique IDs.
+        # Still, every reported result-row offset must have been consumed.
         if raw_rows < current_count:
             raise RuntimeError(f"eightfold_pcsx_row_space_incomplete:{raw_rows}/{current_count}")
 
@@ -126,10 +127,8 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
         by_id: dict[str, dict] = {}
         passes: list[dict] = []
         pass_evidence: list[dict] = []
-        stable_streak = 0
-        converged = False
 
-        for pass_number in range(1, self._max_convergence_passes + 1):
+        for pass_number in range(1, self._full_passes + 1):
             snapshot = self._walk_exact_once(origin, domain)
             passes.append(snapshot)
 
@@ -141,14 +140,6 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             for position_id, row in snapshot["by_id"].items():
                 by_id[position_id] = self._merge_row(by_id.get(position_id), row)
 
-            # Pass one creates the baseline. Each later full pass with no unseen ID
-            # is one convergence observation. Requiring two observations avoids
-            # accepting one lucky-looking offset walk on a busy board.
-            if pass_number > 1 and not new_ids:
-                stable_streak += 1
-            else:
-                stable_streak = 0
-
             pass_evidence.append({
                 "pass": pass_number,
                 "reported_count": snapshot["reported_count"],
@@ -159,19 +150,11 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
                 "duplicate_row_occurrences": snapshot["duplicate_row_occurrences"],
             })
 
-            if stable_streak >= self._stable_passes_required:
-                converged = True
-                break
-
-        if not converged:
-            last = passes[-1] if passes else {}
-            raise RuntimeError(
-                "eightfold_pcsx_inventory_did_not_converge:"
-                f"passes={len(passes)} unique={len(by_id)} "
-                f"last_reported={last.get('reported_count', 0)}"
-            )
-
         final = passes[-1]
+        board_mutated = any(
+            evidence["new_ids_added"] or evidence["prior_ids_not_seen_this_pass"]
+            for evidence in pass_evidence[1:]
+        )
         return by_id, {
             "origin": origin,
             "domain": domain,
@@ -182,8 +165,7 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             "duplicate_id_count": len(final["duplicate_ids"]),
             "duplicate_ids_sample": dict(list(final["duplicate_ids"].items())[:25]),
             "pagination_exhausted": True,
-            "converged": True,
-            "stable_passes_required": self._stable_passes_required,
+            "board_mutated_during_fetch": board_mutated,
             "passes": len(passes),
             "pages_requested": sum(item["pages_requested"] for item in passes),
             "pass_evidence": pass_evidence,
