@@ -1,0 +1,41 @@
+name: ServiceNow Coverage Source Smoke
+
+on:
+  push:
+    branches:
+      - fix/phase1-exact-website-coverage
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: python -m pip install -U pip && pip install -e .
+      - name: Run production ServiceNow source
+        run: |
+          python - <<'PY'
+          from copy import deepcopy
+          from job_fetcher.config import load_config
+          from job_fetcher.job_quality import prefer_usable_jobs
+          from job_fetcher.sources.factory import build_source
+          company = next(c for c in load_config()['companies'] if c['id'] == 'servicenow')
+          c = deepcopy(company)
+          source = build_source(c)
+          jobs = list(prefer_usable_jobs(source.fetch(c)) or [])
+          ids = {str(j.external_id or '').strip() for j in jobs if j.external_id}
+          print('SOURCE', type(source).__name__)
+          print('JOBS', len(jobs), 'UNIQUE_IDS', len(ids))
+          print('SUPPLEMENTS', sum(bool((j.raw or {}).get('_servicenow_website_coverage_supplement')) for j in jobs if isinstance(j.raw, dict)))
+          assert jobs
+          assert len(ids) == len(jobs)
+          PY
