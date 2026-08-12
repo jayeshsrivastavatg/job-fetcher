@@ -65,6 +65,21 @@ def build_source(company):
     """
     company_id = str(company.get("id") or "")
 
+    # Phase 2 exact sources use first-party inventories when one is enumerable.
+    # Navi is intentionally fail-closed: its branded careers surface is access
+    # restricted and no approved enumerable first-party feed has been identified.
+    if company_id in {"uber", "atlassian", "navi"}:
+        from job_fetcher.sources.phase2_exact import (
+            AtlassianListingsApiSource,
+            NaviOfficialCareersSource,
+            UberJobsApiSource,
+        )
+        return {
+            "uber": UberJobsApiSource,
+            "atlassian": AtlassianListingsApiSource,
+            "navi": NaviOfficialCareersSource,
+        }[company_id]()
+
     # Cohesity publishes the complete grouped inventory used by its own careers UI
     # from a first-party JSON endpoint. Prefer that over a separate Workday view.
     if company_id == "cohesity":
@@ -80,16 +95,14 @@ def build_source(company):
 
     # A few employers have moved to a cleaner public provider/API than the source
     # originally discovered for their branded career page.
-    if company_id in {"amazon", "uber", "snowflake", "confluent"}:
+    if company_id in {"amazon", "snowflake", "confluent"}:
         from job_fetcher.sources.current_provider_overrides import (
             AmazonJsonSource,
             ConfluentAshbySource,
             SnowflakeAshbySource,
         )
-        from job_fetcher.sources.guarded_provider_overrides import GuardedUberIndiaSource
         current = {
             "amazon": AmazonJsonSource,
-            "uber": GuardedUberIndiaSource,
             "snowflake": SnowflakeAshbySource,
             "confluent": ConfluentAshbySource,
         }

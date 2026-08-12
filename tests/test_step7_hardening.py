@@ -10,6 +10,7 @@ from job_fetcher.sources.generic_extract import extract_html_links
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.manual import ManualSource
 from job_fetcher.sources.phenom import PhenomSource
+from job_fetcher.sources.phase2_exact import AtlassianListingsApiSource
 from job_fetcher.sources.trakstar import TrakstarSource
 
 
@@ -116,7 +117,7 @@ def test_step7_company_routing_and_policy_state():
     data = _config()
     by = {c["id"]: c for c in data["companies"]}
 
-    assert isinstance(build_source(by["atlassian"]), AtlassianSource)
+    assert isinstance(build_source(by["atlassian"]), AtlassianListingsApiSource)
     assert isinstance(build_source(by["snowflake"]), PhenomSource)
     assert isinstance(build_source(by["goldman_sachs"]), GoldmanSource)
     assert isinstance(build_source(by["dream11"]), TrakstarSource)
