@@ -65,6 +65,12 @@ def build_source(company):
     """
     company_id = str(company.get("id") or "")
 
+    # Cohesity publishes the complete grouped inventory used by its own careers UI
+    # from a first-party JSON endpoint. Prefer that over a separate Workday view.
+    if company_id == "cohesity":
+        from job_fetcher.sources.cohesity import CohesitySource
+        return CohesitySource()
+
     # ServiceNow's public SmartRecruiters listing is useful but has been observed
     # missing jobs that are simultaneously live on careers.servicenow.com. Use a
     # composite source whose invariant is official website inventory <= app output.
