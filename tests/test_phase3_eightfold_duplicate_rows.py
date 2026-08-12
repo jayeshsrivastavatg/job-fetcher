@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from job_fetcher.sources.eightfold_pcsx_exhaustive import EightfoldPcsxExhaustiveSource
 
 
@@ -30,7 +32,8 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     passes = {"number": 0}
 
     # The provider reports 4 result rows, but ID 2 appears twice. This is three
-    # unique vacancies, not one missing vacancy.
+    # unique vacancies, not one missing vacancy. Exact mode now requires two
+    # consecutive no-new-ID passes after the baseline, hence three full passes.
     def fake_page(origin, domain, start):
         if start == 0:
             passes["number"] += 1
@@ -48,9 +51,71 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     assert evidence["provider_row_count"] == 4
     assert evidence["duplicate_row_occurrences"] == 1
     assert evidence["duplicate_id_count"] == 1
-    assert evidence["passes"] == 2
-    assert passes["number"] == 2
+    assert evidence["converged"] is True
+    assert evidence["passes"] == 3
+    assert passes["number"] == 3
     assert rows["2"]["locations"] == ["Mumbai, India", "Bengaluru, India"]
+
+
+def test_convergence_recovers_job_hidden_by_live_offset_shift(monkeypatch):
+    source = EightfoldPcsxExhaustiveSource()
+    snapshots = [
+        # First walk looks complete by row count but misses stable ID 4 because the
+        # board shifted while offsets were being traversed.
+        {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK")},
+        # A later full walk exposes ID 4. ID 1 is absent from this one pass, which
+        # is fine because extras/union are intentional.
+        {"2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
+        {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
+        {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
+    ]
+    index = {"value": 0}
+
+    def fake_walk(origin, domain):
+        rows = snapshots[index["value"]]
+        index["value"] += 1
+        return {
+            "by_id": rows,
+            "reported_count": len(rows),
+            "raw_rows": len(rows),
+            "unique_count": len(rows),
+            "duplicate_ids": {},
+            "duplicate_row_occurrences": 0,
+            "pages_requested": 1,
+        }
+
+    monkeypatch.setattr(source, "_walk_exact_once", fake_walk)
+    rows, evidence = source.enumerate_rows(_company())
+
+    assert set(rows) == {"1", "2", "3", "4"}
+    assert evidence["passes"] == 4
+    assert evidence["pass_evidence"][1]["new_ids_added"] == 1
+    assert evidence["pass_evidence"][2]["new_ids_added"] == 0
+    assert evidence["pass_evidence"][3]["new_ids_added"] == 0
+
+
+def test_convergence_fails_closed_if_every_pass_keeps_discovering_jobs(monkeypatch):
+    source = EightfoldPcsxExhaustiveSource()
+    source._max_convergence_passes = 4
+    counter = {"value": 0}
+
+    def fake_walk(origin, domain):
+        counter["value"] += 1
+        job_id = counter["value"]
+        rows = {str(job_id): _row(job_id, "India")}
+        return {
+            "by_id": rows,
+            "reported_count": 1,
+            "raw_rows": 1,
+            "unique_count": 1,
+            "duplicate_ids": {},
+            "duplicate_row_occurrences": 0,
+            "pages_requested": 1,
+        }
+
+    monkeypatch.setattr(source, "_walk_exact_once", fake_walk)
+    with pytest.raises(RuntimeError, match="inventory_did_not_converge"):
+        source.enumerate_rows(_company())
 
 
 def test_exhaustive_walker_fails_if_provider_row_space_is_not_consumed(monkeypatch):
@@ -61,9 +126,6 @@ def test_exhaustive_walker_fails_if_provider_row_space_is_not_consumed(monkeypat
         lambda origin, domain, start: ([_row(1, "India")], 3) if start == 0 else ([], 3),
     )
 
-    try:
+    with pytest.raises(RuntimeError) as excinfo:
         source.enumerate_rows(_company())
-    except RuntimeError as exc:
-        assert "premature_empty" in str(exc) or "row_space_incomplete" in str(exc)
-    else:
-        raise AssertionError("expected incomplete provider row space to fail closed")
+    assert "premature_empty" in str(excinfo.value) or "row_space_incomplete" in str(excinfo.value)
