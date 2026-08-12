@@ -2,17 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from job_fetcher.sources.base import JobSource
-from job_fetcher.sources.greenhouse import GreenhouseSource
-from job_fetcher.sources.lever import LeverSource
-from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
-from job_fetcher.sources.workday import WorkdaySource
 
-
-# These are not heuristic guesses. They are source contracts for companies whose
-# branded careers page has already been verified to be backed by a structured ATS.
-# Keeping them here lets production ingestion and the certification runner use the
-# same authoritative source even before companies.yaml is fully migrated.
+# Verified source contracts. These companies may advertise jobs on a branded
+# careers page, but the live audit has already shown the actual returned vacancy
+# records come from the structured provider below. Production fetches therefore go
+# straight to that provider instead of re-discovering it through generic HTML.
 KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "postman": {"type": "greenhouse", "board_token": "postman"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
@@ -22,33 +16,33 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "nagarro": {"type": "smartrecruiters", "company_identifier": "Nagarro1"},
     "mindtickle": {"type": "lever", "site": "mindtickle"},
     "broadcom_vmware": {
-        "type": "workday",
-        "host": "broadcom.wd1.myworkdayjobs.com",
-        "tenant": "broadcom",
-        "site": "External_Career",
-        "locale": "en-US",
+        "type": "workday", "host": "broadcom.wd1.myworkdayjobs.com",
+        "tenant": "broadcom", "site": "External_Career", "locale": "en-US",
     },
     "visa": {
-        "type": "workday",
-        "host": "visa.wd5.myworkdayjobs.com",
-        "tenant": "visa",
-        "site": "Visa",
-        "locale": "en-US",
+        "type": "workday", "host": "visa.wd5.myworkdayjobs.com",
+        "tenant": "visa", "site": "Visa", "locale": "en-US",
     },
     "browserstack": {
-        "type": "workday",
-        "host": "browserstack.wd3.myworkdayjobs.com",
-        "tenant": "browserstack",
-        "site": "External",
-        "locale": "en-US",
+        "type": "workday", "host": "browserstack.wd3.myworkdayjobs.com",
+        "tenant": "browserstack", "site": "External", "locale": "en-US",
     },
-}
-
-_PROVIDER_CLASSES = {
-    "greenhouse": GreenhouseSource,
-    "lever": LeverSource,
-    "smartrecruiters": SmartRecruitersSource,
-    "workday": WorkdaySource,
+    "cisco": {
+        "type": "workday", "host": "cisco.wd5.myworkdayjobs.com",
+        "tenant": "cisco", "site": "Cisco_Careers", "locale": "en-US",
+    },
+    "barclays": {
+        "type": "workday", "host": "barclays.wd3.myworkdayjobs.com",
+        "tenant": "barclays", "site": "External_Career_Site_Barclays", "locale": "en-US",
+    },
+    "hpe": {
+        "type": "workday", "host": "hpe.wd5.myworkdayjobs.com",
+        "tenant": "hpe", "site": "Jobsathpe", "locale": "en-US",
+    },
+    "sprinklr": {
+        "type": "workday", "host": "sprinklr.wd1.myworkdayjobs.com",
+        "tenant": "sprinklr", "site": "careers", "locale": "en-US",
+    },
 }
 
 
@@ -56,24 +50,3 @@ def known_provider_config(company_or_id) -> dict | None:
     company_id = company_or_id if isinstance(company_or_id, str) else str((company_or_id or {}).get("id") or "")
     config = KNOWN_PROVIDER_CONFIGS.get(company_id)
     return deepcopy(config) if config else None
-
-
-def effective_provider_company(company: dict) -> dict:
-    config = known_provider_config(company)
-    if not config:
-        return company
-    candidate = deepcopy(company)
-    candidate["source"] = config
-    return candidate
-
-
-class KnownProviderSource(JobSource):
-    """Fetch only from a verified structured provider; do not fall back to HTML guessing."""
-
-    def fetch(self, company):
-        candidate = effective_provider_company(company)
-        source_type = str((candidate.get("source") or {}).get("type") or "")
-        source_cls = _PROVIDER_CLASSES.get(source_type)
-        if source_cls is None:
-            raise RuntimeError(f"unsupported_known_provider:{source_type}")
-        return source_cls().fetch(candidate)
