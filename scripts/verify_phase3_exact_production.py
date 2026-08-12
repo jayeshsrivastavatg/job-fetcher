@@ -92,14 +92,20 @@ def browser_witness(company: dict) -> dict:
     return captured
 
 
-def app_snapshot(company: dict) -> dict:
-    source = build_source(deepcopy(company))
-    jobs = list(prefer_usable_jobs(source.fetch(deepcopy(company))) or [])
-    ids = {
+def _job_ids(jobs) -> set[str]:
+    return {
         str(getattr(job, "external_id", "") or "").strip()
         for job in jobs
         if str(getattr(job, "external_id", "") or "").strip()
     }
+
+
+def app_snapshot(company: dict) -> dict:
+    source = build_source(deepcopy(company))
+    raw_jobs = list(source.fetch(deepcopy(company)) or [])
+    raw_ids = _job_ids(raw_jobs)
+    jobs = list(prefer_usable_jobs(raw_jobs) or [])
+    ids = _job_ids(jobs)
     india = [
         job
         for job in jobs
@@ -116,6 +122,9 @@ def app_snapshot(company: dict) -> dict:
         "adapter": type(source).__name__,
         "ids": ids,
         "count": len(jobs),
+        "raw_ids": raw_ids,
+        "raw_count": len(raw_jobs),
+        "quality_removed_ids": raw_ids - ids,
         "india_count": len(india),
         "india_with_description": india_with_jd,
     }
@@ -131,10 +140,14 @@ def verify(company: dict) -> dict:
     missing = stable_current - app["ids"]
     witness_still_current = set(witness["ids"]) & after["ids"]
     missing_witness = witness_still_current - app["ids"]
+    india_jd_complete = app["india_with_description"] == app["india_count"]
 
     # `data.count` is a result-row count. Some Eightfold boards legitimately repeat
     # one vacancy ID in multiple rows, so exact completeness is based on the stable
     # vacancy-ID set *after* proving every result-row offset was exhausted.
+    # Phase 3 also certifies that every retained India vacancy is AI-ready: a current
+    # job without its JD is kept in inventory, but certification fails until detail
+    # hydration succeeds.
     passed = (
         before["pagination_exhausted"]
         and after["pagination_exhausted"]
@@ -142,6 +155,7 @@ def verify(company: dict) -> dict:
         and after["provider_row_count"] >= after["reported_count"]
         and not missing
         and not missing_witness
+        and india_jd_complete
         and witness["url"].startswith(f"{before['origin']}/api/pcsx/search")
     )
 
@@ -163,6 +177,10 @@ def verify(company: dict) -> dict:
         "official_after_duplicate_rows": after["duplicate_row_occurrences"],
         "stable_current_jobs_checked": len(stable_current),
         "production_jobs": app["count"],
+        "production_raw_jobs": app["raw_count"],
+        "production_raw_unique_ids": len(app["raw_ids"]),
+        "quality_removed_id_count": len(app["quality_removed_ids"]),
+        "quality_removed_ids": sorted(app["quality_removed_ids"])[:200],
         "missing_count": len(missing),
         "missing_ids": sorted(missing)[:200],
         "extra_count_vs_stable": len(app["ids"] - stable_current),
@@ -180,6 +198,7 @@ def verify(company: dict) -> dict:
         "pages_requested_after": after["pages_requested"],
         "india_jobs": app["india_count"],
         "india_jobs_with_full_description": app["india_with_description"],
+        "india_jd_complete": india_jd_complete,
         "generated_at": utcnow(),
     }
 
@@ -194,6 +213,7 @@ def main() -> int:
     print(
         f"{row['company']}: verdict={row['verdict']} production={row['production_jobs']} "
         f"stable_official={row['stable_current_jobs_checked']} missing={row['missing_count']} "
+        f"quality_removed={row['quality_removed_id_count']} "
         f"browser_count={row['browser_witness_count']} "
         f"rows={row['official_after_rows_exhausted']}/{row['official_after_reported_rows']} "
         f"duplicate_rows={row['official_after_duplicate_rows']} "
