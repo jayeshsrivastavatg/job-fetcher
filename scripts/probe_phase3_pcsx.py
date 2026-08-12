@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from urllib.parse import urlparse
 
 import requests
@@ -22,30 +21,32 @@ def api_url(career_url: str) -> str:
     return f"{p.scheme}://{p.netloc}/api/pcsx/search"
 
 
+def fetch(endpoint, domain, extra):
+    params = {"domain": domain, "query": "", "location": "", "start": 0, "hl": "en", **extra}
+    response = requests.get(endpoint, params=params, headers=HEADERS, timeout=30)
+    print("TRY", extra or {"default": True}, "STATUS", response.status_code, "URL", response.url, flush=True)
+    if response.status_code != 200:
+        print("BODY", response.text[:1000], flush=True)
+        return
+    data = response.json().get("data") or {}
+    rows = data.get("positions") or []
+    print("RESULT", "count", data.get("count"), "rows", len(rows), flush=True)
+
+
 def main():
+    variants = [
+        {},
+        {"num": 100},
+        {"limit": 100},
+        {"size": 100},
+        {"page_size": 100},
+    ]
     for name, career in TARGETS.items():
         endpoint = api_url(career)
         domain = "microsoft.com" if name == "microsoft" else "twilio.com" if name == "twilio" else "morganstanley.com"
-        print(f"=== {name} ===")
-        first = requests.get(endpoint, params={"domain": domain, "query": "", "location": "", "start": 0, "hl": "en"}, headers=HEADERS, timeout=30)
-        print("URL", first.url, "STATUS", first.status_code)
-        first.raise_for_status()
-        data = first.json()["data"]
-        positions = data.get("positions") or []
-        count = int(data.get("count") or 0)
-        print("COUNT", count, "PAGE0", len(positions))
-        if positions:
-            print("FIRST_POSITION", json.dumps(positions[0], ensure_ascii=False)[:10000])
-            print("LAST_POSITION_PAGE0", json.dumps(positions[-1], ensure_ascii=False)[:10000])
-        for start in sorted({10, max(0, count - 10)}):
-            response = requests.get(endpoint, params={"domain": domain, "query": "", "location": "", "start": start, "hl": "en"}, headers=HEADERS, timeout=30)
-            response.raise_for_status()
-            page = response.json()["data"]
-            rows = page.get("positions") or []
-            print("PAGE", start, "COUNT_FIELD", page.get("count"), "ROWS", len(rows))
-            if rows:
-                print("PAGE_FIRST", start, json.dumps(rows[0], ensure_ascii=False)[:5000])
-                print("PAGE_LAST", start, json.dumps(rows[-1], ensure_ascii=False)[:5000])
+        print(f"=== {name} ===", flush=True)
+        for variant in variants:
+            fetch(endpoint, domain, variant)
 
 
 if __name__ == "__main__":
