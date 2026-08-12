@@ -48,7 +48,7 @@ SOURCES = {
 
 
 def build_raw_source(company):
-    """Build exactly the adapter configured in companies.yaml."""
+    """Build exactly the adapter in the company's current in-memory source contract."""
     source_type = company["source"]["type"]
     if source_type not in SOURCES:
         raise ValueError(f"Unsupported source type: {source_type}")
@@ -56,17 +56,17 @@ def build_raw_source(company):
 
 
 def build_source(company):
-    """Return the configured adapter, enhanced with recovery where necessary.
+    """Return the most authoritative known adapter for this company.
 
-    Recovery wrappers subclass the configured adapter, so existing diagnostics and
-    type expectations remain valid while actual fetches get hardened first-party
-    fallback paths.
+    Structured/provider contracts are preferred over branded-page HTML heuristics.
+    When a verified provider override exists we update only the in-memory company
+    object. This does not rewrite companies.yaml, but it lets fetch/health/
+    certification all see and validate the same effective source contract.
     """
     company_id = str(company.get("id") or "")
 
     # A few employers have moved to a cleaner public provider/API than the source
-    # originally discovered for their branded career page. Keep these overrides
-    # isolated so they are easy to remove if the employer changes providers again.
+    # originally discovered for their branded career page.
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
         from job_fetcher.sources.current_provider_overrides import (
             AmazonJsonSource,
@@ -82,9 +82,16 @@ def build_source(company):
         }
         return current[company_id]()
 
+    # Promote branded pages whose underlying ATS is already known. Do not fall
+    # back to generic HTML guessing for these companies: provider failure should be
+    # visible rather than replaced by plausible-looking navigation links.
+    from job_fetcher.sources.known_provider_overrides import known_provider_config
+    effective_source = known_provider_config(company_id)
+    if effective_source:
+        company["source"] = effective_source
+        return build_raw_source(company)
+
     # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
-    # Check that signal before generic extraction can mistake navigation links for
-    # vacancies (Zerodha is the current example).
     source = company.get("source") or {}
     if source.get("type") == "auto" and source.get("allow_zero_jobs"):
         from job_fetcher.sources.zero_aware_auto import ZeroAwareAutoSource
