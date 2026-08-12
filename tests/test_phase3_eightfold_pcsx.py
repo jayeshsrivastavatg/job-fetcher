@@ -53,13 +53,16 @@ def test_contract_uses_exact_branded_origin_and_domain():
     assert domain == "microsoft.com"
 
 
+def test_public_pcs_page_size_is_the_provider_maximum():
+    assert EightfoldPcsxSource.page_size == 10
+
+
 def test_exhausts_offsets_and_preserves_every_position_id(monkeypatch):
     source = EightfoldPcsxSource()
     pages = {
         0: ([_row(1), _row(2)], 5),
         2: ([_row(3), _row(4)], 5),
         4: ([_row(5)], 5),
-        5: ([], 5),
     }
     calls = []
 
@@ -70,7 +73,7 @@ def test_exhausts_offsets_and_preserves_every_position_id(monkeypatch):
     monkeypatch.setattr(source, "_page", fake_page)
     rows, evidence = source.enumerate_rows(_company())
     assert set(rows) == {"1", "2", "3", "4", "5"}
-    assert calls == [0, 2, 4, 5]
+    assert calls == [0, 2, 4]
     assert evidence["reported_count"] == 5
     assert evidence["unique_count"] == 5
     assert evidence["pagination_exhausted"] is True
@@ -82,7 +85,6 @@ def test_chases_count_growth_during_pagination(monkeypatch):
         0: ([_row(1), _row(2)], 4),
         2: ([_row(3), _row(4)], 6),
         4: ([_row(5), _row(6)], 6),
-        6: ([], 6),
     }
     monkeypatch.setattr(source, "_page", lambda origin, domain, start: pages[start])
     rows, evidence = source.enumerate_rows(_company())
@@ -96,7 +98,6 @@ def test_retries_with_union_when_offset_shift_creates_duplicate(monkeypatch):
     first_pass = {
         0: ([_row(1), _row(2)], 4),
         2: ([_row(2), _row(3)], 4),
-        4: ([], 4),
     }
     second_pass = {
         0: ([_row(1), _row(2)], 4),
@@ -114,6 +115,7 @@ def test_retries_with_union_when_offset_shift_creates_duplicate(monkeypatch):
     rows, evidence = source.enumerate_rows(_company())
     assert set(rows) == {"1", "2", "3", "4"}
     assert evidence["reported_count"] == 4
+    assert calls == [0, 2, 0, 2]
 
 
 def test_fails_closed_if_second_pass_still_cannot_cover_reported_count(monkeypatch):
@@ -121,7 +123,6 @@ def test_fails_closed_if_second_pass_still_cannot_cover_reported_count(monkeypat
     pages = {
         0: ([_row(1), _row(2)], 4),
         2: ([_row(2), _row(3)], 4),
-        4: ([], 4),
     }
     monkeypatch.setattr(source, "_page", lambda origin, domain, start: pages[start])
     with pytest.raises(RuntimeError, match="eightfold_pcsx_incomplete"):
@@ -133,7 +134,7 @@ def test_india_job_is_hydrated_but_listing_survives_detail_failure(monkeypatch):
     india = _row(7, "Principal Software Engineer", "Bengaluru, Karnataka, India")
     monkeypatch.setattr(source, "enumerate_rows", lambda company: (
         {"7": india},
-        {"origin": "https://jobs.example.com", "domain": "example.com", "reported_count": 1, "unique_count": 1, "pagination_exhausted": True, "pages_requested": 2},
+        {"origin": "https://jobs.example.com", "domain": "example.com", "reported_count": 1, "unique_count": 1, "pagination_exhausted": True, "pages_requested": 1},
     ))
     monkeypatch.setattr(source, "_detail", lambda origin, domain, position_id: {
         **india,
