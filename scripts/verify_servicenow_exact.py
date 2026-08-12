@@ -26,7 +26,8 @@ def production_ids(company):
         for value in (getattr(job, "external_id", None), getattr(job, "job_url", None)):
             m = re.search(r"(\d{8,})", str(value or ""))
             if m:
-                ids.add(m.group(1)); break
+                ids.add(m.group(1))
+                break
     return type(source).__name__, jobs, ids
 
 
@@ -51,15 +52,13 @@ def parse_page(page):
 
 def main():
     company = next(c for c in load_config()["companies"] if c["id"] == "servicenow")
-    adapter, jobs, app_ids = production_ids(company)
-    print(f"APP adapter={adapter} jobs={len(jobs)} ids={len(app_ids)}", flush=True)
+    adapter, jobs_before, app_ids_before = production_ids(company)
+    print(f"APP_BEFORE adapter={adapter} jobs={len(jobs_before)} ids={len(app_ids_before)}", flush=True)
 
     all_records = {}
     totals = []
-    pages = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # First page establishes the display total/page count.
         context = browser.new_context(user_agent="Mozilla/5.0 (X11; Linux x86_64) Chrome/131 Safari/537.36", locale="en-US")
         page = context.new_page()
         page.goto(f"{BASE}?page=1&pagesize=20&audit={int(time.time())}", wait_until="domcontentloaded", timeout=90000)
@@ -67,13 +66,9 @@ def main():
         total, recs = parse_page(page)
         totals.append(total)
         all_records.update(recs)
-        pages.append((1, total, len(recs), len(all_records)))
         context.close()
         expected_pages = math.ceil((total or len(recs)) / 20)
 
-        # Use a fresh browser context for every page to defeat sticky pagination,
-        # stale SPA state and per-context response caching. Do not stop on a
-        # repeated page; later pages may still be valid.
         for n in range(2, min(expected_pages + 3, 80) + 1):
             best = {}
             page_total = None
@@ -87,28 +82,38 @@ def main():
                 context.close()
                 if len(recs) > len(best):
                     best = recs
-                # Accept a page if it contributes any previously unseen job IDs.
                 if set(recs) - set(all_records):
                     break
                 time.sleep(0.35)
             if page_total is not None:
                 totals.append(page_total)
             all_records.update(best)
-            pages.append((n, page_total, len(best), len(all_records)))
             print(f"PAGE {n} total={page_total} page_jobs={len(best)} unique_so_far={len(all_records)}", flush=True)
         browser.close()
 
     website_ids = set(all_records)
-    missing = website_ids - app_ids
+    # Re-read the authoritative API after the website crawl. A public board can
+    # publish/close jobs while we walk 24 pages; the app must cover the finished
+    # website snapshot, not an API snapshot taken 40 seconds earlier.
+    _, jobs_after, app_ids_after = production_ids(company)
+    missing_before = website_ids - app_ids_before
+    missing_after = website_ids - app_ids_after
+
+    print(f"APP_AFTER jobs={len(jobs_after)} ids={len(app_ids_after)}")
     print(f"WEBSITE unique={len(website_ids)} totals_first_last={totals[0] if totals else None}/{totals[-1] if totals else None}")
-    print(f"COVERAGE website_missing_from_app={len(missing)} app_extras={len(app_ids-website_ids)}")
-    for jid in sorted(missing):
+    print(
+        f"COVERAGE missing_before={len(missing_before)} missing_after={len(missing_after)} "
+        f"app_after_extras={len(app_ids_after-website_ids)}"
+    )
+    if missing_before and not missing_after:
+        print("BOARD_MUTATION resolved_by_post_crawl_provider_refresh", sorted(missing_before))
+    for jid in sorted(missing_after):
         print("MISSING", jid, all_records[jid][0], all_records[jid][1])
 
     stable = bool(totals) and totals[0] == totals[-1]
     exhaustive = bool(totals) and len(website_ids) >= totals[-1]
-    print(f"PROOF stable_total={stable} enumeration_exhausted={exhaustive}")
-    if missing or not exhaustive:
+    print(f"PROOF stable_website_total={stable} enumeration_exhausted={exhaustive}")
+    if missing_after or not exhaustive:
         raise SystemExit(2)
     if not stable:
         raise SystemExit(3)
