@@ -63,8 +63,8 @@ def test_official_html_parses_oracle_branded_job_link():
 def test_recovery_registry_covers_every_current_red_failure():
     from job_fetcher.sources.recovery import RECOVERY_PLANS
 
-    # Captured from the failing-company run on 2026-08-12. Zomato/Blinkit is
-    # intentionally excluded: Eternal currently exposes no public jobs feed.
+    # Historical recovery plans remain registered even after some companies are
+    # promoted to exact first-party provider adapters.
     expected = {
         "atlassian",
         "microsoft",
@@ -84,20 +84,20 @@ def test_recovery_registry_covers_every_current_red_failure():
     assert expected <= set(RECOVERY_PLANS)
 
 
-def test_factory_routes_known_failure_through_adapter_compatible_recovery():
-    from job_fetcher.sources.eightfold import EightfoldSource
+def test_factory_promotes_microsoft_above_legacy_recovery():
+    from job_fetcher.sources.eightfold_pcsx import EightfoldPcsxSource
     from job_fetcher.sources.factory import build_source
-    from job_fetcher.sources.recovery_adapters import RecoveryEightfoldSource
 
     company = {
         "id": "microsoft",
         "name": "Microsoft",
-        "career_url": "https://apply.careers.microsoft.com/careers",
-        "source": {"type": "eightfold", "entry_url": "https://apply.careers.microsoft.com/careers"},
+        "career_url": "https://apply.careers.microsoft.com/careers?domain=microsoft.com&hl=en",
+        "source": {
+            "type": "eightfold",
+            "entry_url": "https://apply.careers.microsoft.com/careers?domain=microsoft.com&hl=en",
+        },
     }
-    source = build_source(company)
-    assert isinstance(source, RecoveryEightfoldSource)
-    assert isinstance(source, EightfoldSource)
+    assert isinstance(build_source(company), EightfoldPcsxSource)
 
 
 def test_factory_keeps_healthy_company_on_configured_adapter():
