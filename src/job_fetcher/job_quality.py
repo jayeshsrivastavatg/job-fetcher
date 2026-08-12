@@ -24,6 +24,7 @@ _AUTHORITATIVE_JOB_FEEDS = {
     "workday",
     "smartrecruiters",
     "amazon_json",
+    "cohesity_json",
 }
 
 # These are common careers-site navigation/category labels that the old generic
