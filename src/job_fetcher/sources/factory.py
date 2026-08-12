@@ -48,7 +48,7 @@ SOURCES = {
 
 
 def build_raw_source(company):
-    """Build exactly the adapter configured in companies.yaml."""
+    """Build exactly the adapter in the company's current in-memory source contract."""
     source_type = company["source"]["type"]
     if source_type not in SOURCES:
         raise ValueError(f"Unsupported source type: {source_type}")
@@ -59,8 +59,9 @@ def build_source(company):
     """Return the most authoritative known adapter for this company.
 
     Structured/provider contracts are preferred over branded-page HTML heuristics.
-    Generic/recovery extraction is used only when no verified source contract is
-    registered for the company.
+    When a verified provider override exists we update only the in-memory company
+    object. This does not rewrite companies.yaml, but it lets fetch/health/
+    certification all see and validate the same effective source contract.
     """
     company_id = str(company.get("id") or "")
 
@@ -81,12 +82,14 @@ def build_source(company):
         }
         return current[company_id]()
 
-    # Promote companies whose branded pages are already known to be backed by a
-    # structured ATS. Once a contract is known we deliberately do not fall back to
-    # arbitrary page-link extraction: a loud provider failure is safer than fake jobs.
-    from job_fetcher.sources.known_provider_overrides import KNOWN_PROVIDER_CONFIGS, KnownProviderSource
-    if company_id in KNOWN_PROVIDER_CONFIGS:
-        return KnownProviderSource()
+    # Promote branded pages whose underlying ATS is already known. Do not fall
+    # back to generic HTML guessing for these companies: provider failure should be
+    # visible rather than replaced by plausible-looking navigation links.
+    from job_fetcher.sources.known_provider_overrides import known_provider_config
+    effective_source = known_provider_config(company_id)
+    if effective_source:
+        company["source"] = effective_source
+        return build_raw_source(company)
 
     # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
     source = company.get("source") or {}
