@@ -20,7 +20,7 @@ jobs:
           python-version: '3.11'
           cache: pip
       - name: Install package
-        run: python -m pip install -U pip && pip install -e .
+        run: python -m pip install -U pip && pip install -e . pytest
       - name: Unit tests
         run: pytest -q tests/test_phase1_exact_sources.py
       - name: Install Chromium
