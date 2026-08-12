@@ -16,8 +16,6 @@ from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.http_client import session, timeout_seconds
 from job_fetcher.sources.phase2_exact import AtlassianListingsApiSource
 
-TARGETS = ("uber", "atlassian", "navi")
-
 
 def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -30,12 +28,7 @@ def clean(value) -> str:
 def uber_official_snapshot() -> dict:
     endpoint = "https://jobs.uber.com/api/jobs/search/"
     page_size = 100
-    first = session().get(
-        endpoint,
-        params={"page": 1, "pagesize": page_size},
-        timeout=timeout_seconds(),
-        headers={"Accept": "application/json"},
-    )
+    first = session().get(endpoint, params={"page": 1, "pagesize": page_size}, timeout=timeout_seconds(), headers={"Accept": "application/json"})
     first.raise_for_status()
     payload = first.json()
     total_pages = int(payload.get("totalPages") or 0)
@@ -43,33 +36,17 @@ def uber_official_snapshot() -> dict:
     rows = list(payload.get("jobs") or [])
     page_counts = [len(rows)]
     for page in range(2, total_pages + 1):
-        response = session().get(
-            endpoint,
-            params={"page": page, "pagesize": page_size},
-            timeout=timeout_seconds(),
-            headers={"Accept": "application/json"},
-        )
+        response = session().get(endpoint, params={"page": page, "pagesize": page_size}, timeout=timeout_seconds(), headers={"Accept": "application/json"})
         response.raise_for_status()
         data = response.json()
         if int(data.get("page") or page) != page:
             raise RuntimeError(f"uber_official_unexpected_page:{page}")
         rows.extend(data.get("jobs") or [])
         page_counts.append(len(data.get("jobs") or []))
-    by_id = {
-        clean(row.get("Id")): row
-        for row in rows
-        if isinstance(row, dict) and clean(row.get("Id"))
-    }
+    by_id = {clean(row.get("Id")): row for row in rows if isinstance(row, dict) and clean(row.get("Id"))}
     if len(by_id) < max(0, total_jobs - 2):
         raise RuntimeError(f"uber_official_incomplete:{len(by_id)}/{total_jobs}")
-    return {
-        "source": endpoint,
-        "total_reported": total_jobs,
-        "total_pages": total_pages,
-        "page_counts": page_counts,
-        "ids": set(by_id),
-        "rows": by_id,
-    }
+    return {"source": endpoint, "total_reported": total_jobs, "total_pages": total_pages, "page_counts": page_counts, "ids": set(by_id), "rows": by_id}
 
 
 def atlassian_official_snapshot() -> dict:
@@ -80,19 +57,14 @@ def atlassian_official_snapshot() -> dict:
     if not isinstance(payload, list):
         raise RuntimeError("atlassian_official_invalid_payload")
     rows = [row for row in payload if isinstance(row, dict)]
-    by_key = {}
-    for row in rows:
-        key = AtlassianListingsApiSource.record_key(row)
-        if not key:
-            raise RuntimeError("atlassian_official_record_without_identity")
-        if key in by_key:
-            raise RuntimeError(f"atlassian_official_duplicate_identity:{key}")
-        by_key[key] = row
+    unique = AtlassianListingsApiSource.unique_rows(rows)
     return {
         "source": endpoint,
-        "total_reported": len(rows),
-        "ids": set(by_key),
-        "rows": by_key,
+        "raw_rows": len(rows),
+        "unique_vacancies": len(unique),
+        "duplicate_ui_rows": len(rows) - len(unique),
+        "ids": set(unique),
+        "rows": unique,
     }
 
 
@@ -100,12 +72,7 @@ def app_snapshot(company: dict) -> dict:
     source = build_source(deepcopy(company))
     jobs = list(prefer_usable_jobs(source.fetch(deepcopy(company))) or [])
     ids = {clean(getattr(job, "external_id", None)) for job in jobs if clean(getattr(job, "external_id", None))}
-    return {
-        "adapter": type(source).__name__,
-        "count": len(jobs),
-        "ids": ids,
-        "jobs": jobs,
-    }
+    return {"adapter": type(source).__name__, "count": len(jobs), "ids": ids, "jobs": jobs}
 
 
 def detail_evidence(job) -> dict:
@@ -124,30 +91,16 @@ def verify_uber(company: dict) -> dict:
     after = uber_official_snapshot()
     stable = before["ids"] & after["ids"]
     missing = stable - app["ids"]
-    invalid_urls = [
-        detail_evidence(job)
-        for job in app["jobs"]
-        if not re.fullmatch(r"https://jobs\.uber\.com/en/jobs/\d+/", clean(getattr(job, "job_url", None)))
-    ]
+    invalid_urls = [detail_evidence(job) for job in app["jobs"] if not re.fullmatch(r"https://jobs\.uber\.com/en/jobs/\d+/", clean(getattr(job, "job_url", None)))]
     invalid_ids = [detail_evidence(job) for job in app["jobs"] if not clean(getattr(job, "external_id", None)).isdigit()]
     passed = not missing and not invalid_urls and not invalid_ids
     return {
-        "company": "Uber",
-        "verdict": "CERTIFIED" if passed else "FAILED",
-        "passed": passed,
-        "official_source": before["source"],
-        "official_before": len(before["ids"]),
-        "official_after": len(after["ids"]),
-        "stable_current_jobs_checked": len(stable),
-        "app_jobs": app["count"],
-        "missing_count": len(missing),
-        "missing_ids": sorted(missing)[:100],
-        "extra_count": len(app["ids"] - stable),
-        "pagination_exhausted": len(before["page_counts"]) == before["total_pages"],
-        "page_counts": before["page_counts"],
-        "invalid_url_records": invalid_urls[:20],
-        "invalid_id_records": invalid_ids[:20],
-        "adapter": app["adapter"],
+        "company": "Uber", "verdict": "CERTIFIED" if passed else "FAILED", "passed": passed,
+        "official_source": before["source"], "official_before": len(before["ids"]), "official_after": len(after["ids"]),
+        "stable_current_jobs_checked": len(stable), "app_jobs": app["count"], "missing_count": len(missing),
+        "missing_ids": sorted(missing)[:100], "extra_count": len(app["ids"] - stable),
+        "pagination_exhausted": len(before["page_counts"]) == before["total_pages"], "page_counts": before["page_counts"],
+        "invalid_url_records": invalid_urls[:20], "invalid_id_records": invalid_ids[:20], "adapter": app["adapter"],
         "sample": [detail_evidence(job) for job in app["jobs"][:5]],
     }
 
@@ -158,29 +111,17 @@ def verify_atlassian(company: dict) -> dict:
     after = atlassian_official_snapshot()
     stable = before["ids"] & after["ids"]
     missing = stable - app["ids"]
-    invalid_urls = [
-        detail_evidence(job)
-        for job in app["jobs"]
-        if not re.fullmatch(r"https://www\.atlassian\.com/company/careers/details/\d+", clean(getattr(job, "job_url", None)))
-    ]
+    invalid_urls = [detail_evidence(job) for job in app["jobs"] if not re.fullmatch(r"https://www\.atlassian\.com/company/careers/details/\d+", clean(getattr(job, "job_url", None)))]
     invalid_ids = [detail_evidence(job) for job in app["jobs"] if not re.fullmatch(r"[^:]+:\d+", clean(getattr(job, "external_id", None)))]
     passed = not missing and not invalid_urls and not invalid_ids
     return {
-        "company": "Atlassian",
-        "verdict": "CERTIFIED" if passed else "FAILED",
-        "passed": passed,
-        "official_source": before["source"],
-        "official_before": len(before["ids"]),
-        "official_after": len(after["ids"]),
-        "stable_current_jobs_checked": len(stable),
-        "app_jobs": app["count"],
-        "missing_count": len(missing),
-        "missing_ids": sorted(missing)[:100],
-        "extra_count": len(app["ids"] - stable),
-        "pagination_exhausted": True,
-        "invalid_url_records": invalid_urls[:20],
-        "invalid_id_records": invalid_ids[:20],
-        "adapter": app["adapter"],
+        "company": "Atlassian", "verdict": "CERTIFIED" if passed else "FAILED", "passed": passed,
+        "official_source": before["source"], "official_raw_rows_before": before["raw_rows"],
+        "official_unique_before": len(before["ids"]), "official_unique_after": len(after["ids"]),
+        "duplicate_ui_rows_before": before["duplicate_ui_rows"], "stable_current_jobs_checked": len(stable),
+        "app_jobs": app["count"], "missing_count": len(missing), "missing_ids": sorted(missing)[:100],
+        "extra_count": len(app["ids"] - stable), "pagination_exhausted": True,
+        "invalid_url_records": invalid_urls[:20], "invalid_id_records": invalid_ids[:20], "adapter": app["adapter"],
         "sample": [detail_evidence(job) for job in app["jobs"][:5]],
     }
 
@@ -212,50 +153,30 @@ def verify_navi(company: dict) -> dict:
     branded = session().get(branded_url, timeout=timeout_seconds(), allow_redirects=True)
     restricted = int(branded.status_code) in {401, 403, 429}
     freshteam = freshteam_zero_jobs()
-    passed = (
-        emitted_jobs is None
-        and blocked_category == "manual_or_approved_feed_required"
-        and restricted
-        and freshteam["zero_jobs"]
-    )
+    passed = emitted_jobs is None and blocked_category == "manual_or_approved_feed_required" and restricted and freshteam["zero_jobs"]
     return {
-        "company": "Navi",
-        "verdict": "BLOCKED" if passed else "FAILED",
-        "passed": passed,
-        "adapter": type(source).__name__,
-        "official_branded_url": branded_url,
-        "official_branded_http_status": branded.status_code,
-        "official_access_restricted": restricted,
-        "old_public_board": freshteam,
-        "production_error_category": blocked_category,
-        "production_error": blocked_error,
+        "company": "Navi", "verdict": "BLOCKED" if passed else "FAILED", "passed": passed,
+        "adapter": type(source).__name__, "official_branded_url": branded_url,
+        "official_branded_http_status": branded.status_code, "official_access_restricted": restricted,
+        "old_public_board": freshteam, "production_error_category": blocked_category, "production_error": blocked_error,
         "production_emitted_jobs": None if emitted_jobs is None else len(emitted_jobs),
         "reason": "No approved enumerable first-party vacancy feed can currently be certified; fail closed instead of publishing guessed careers-page links.",
     }
 
 
 def main() -> int:
-    config = load_config()
-    companies = {c["id"]: c for c in config.get("companies", [])}
+    companies = {c["id"]: c for c in load_config().get("companies", [])}
     rows = []
-    for cid, verifier in (
-        ("uber", verify_uber),
-        ("atlassian", verify_atlassian),
-        ("navi", verify_navi),
-    ):
+    for cid, verifier in (("uber", verify_uber), ("atlassian", verify_atlassian), ("navi", verify_navi)):
         row = verifier(companies[cid])
         rows.append(row)
-        print(
-            f"{row['company']}: verdict={row['verdict']} passed={row['passed']} "
-            f"missing={row.get('missing_count', 0)} app={row.get('app_jobs', row.get('production_emitted_jobs'))}",
-            flush=True,
-        )
+        print(f"{row['company']}: verdict={row['verdict']} passed={row['passed']} missing={row.get('missing_count', 0)} app={row.get('app_jobs', row.get('production_emitted_jobs'))}", flush=True)
         for missing in row.get("missing_ids", [])[:20]:
             print(f"  MISSING {missing}", flush=True)
 
     payload = {
         "generated_at": utcnow(),
-        "rule": "Every current vacancy from the official employer careers inventory must exist in production output. Extras are allowed. If no approved enumerable source exists, fail closed and report BLOCKED.",
+        "rule": "Every current vacancy from the official employer careers inventory must exist in production output. Extras are allowed. Repeated rows for the same stable requisition are one vacancy. If no approved enumerable source exists, fail closed and report BLOCKED.",
         "companies": rows,
         "passed": all(row["passed"] for row in rows),
     }
