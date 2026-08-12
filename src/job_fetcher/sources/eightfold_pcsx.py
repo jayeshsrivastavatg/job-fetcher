@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
-from requests import HTTPError, RetryError
+from requests.exceptions import HTTPError, RetryError
 
 from job_fetcher.models import Job
 from job_fetcher.sources.base import JobSource
@@ -18,7 +18,7 @@ class EightfoldPcsxSource(JobSource):
 
     The employer UI calls ``/api/pcsx/search`` with an offset named ``start``.
     Eightfold currently caps this public search endpoint at 10 rows per request, so
-    large employers require hundreds of requests.  We deliberately pace those
+    large employers require hundreds of requests. We deliberately pace those
     requests and use long 429 backoff rather than hammering the careers service.
 
     The response reports the current full-board ``count`` and stable position IDs.
@@ -26,7 +26,7 @@ class EightfoldPcsxSource(JobSource):
     mutation shifts offsets, and fail closed if the current reported inventory is
     still not covered.
 
-    Listing completeness and JD hydration are separate.  Every published listing
+    Listing completeness and JD hydration are separate. Every published listing
     is retained; India listings are additionally hydrated from the public
     ``position_details`` endpoint so downstream relevance/AI receives the full JD.
     """
@@ -264,10 +264,6 @@ class EightfoldPcsxSource(JobSource):
         reported_count = first_count
         pages = first_pages
 
-        # Offset pagination can shift when vacancies open/close while the board is
-        # being walked. If the first pass is below the provider's current count,
-        # walk once more and union stable IDs. Extras are safe; missing current IDs
-        # are not.
         if len(by_id) < reported_count:
             second_rows, second_count, second_pages = self._walk_once(origin, domain, reported_count)
             pages += second_pages
