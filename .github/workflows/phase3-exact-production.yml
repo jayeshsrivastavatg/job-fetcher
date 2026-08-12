@@ -3,6 +3,7 @@ name: Phase 3 Exact Production Coverage
 on:
   push:
     branches:
+      - fix/phase3-eightfold-exact-coverage
       - main
   workflow_dispatch:
 
