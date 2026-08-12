@@ -65,6 +65,13 @@ def build_source(company):
     """
     company_id = str(company.get("id") or "")
 
+    # ServiceNow's public SmartRecruiters listing is useful but has been observed
+    # missing jobs that are simultaneously live on careers.servicenow.com. Use a
+    # composite source whose invariant is official website inventory <= app output.
+    if company_id == "servicenow":
+        from job_fetcher.sources.servicenow import ServiceNowSource
+        return ServiceNowSource()
+
     # A few employers have moved to a cleaner public provider/API than the source
     # originally discovered for their branded career page.
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
