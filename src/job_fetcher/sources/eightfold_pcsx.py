@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ class EightfoldPcsxSource(JobSource):
 
     source_type = "eightfold_pcsx"
     page_size = 10
+    description_fields = ("jobDescription", "description", "descriptionPlain", "content")
 
     def __init__(self):
         self._client = session()
@@ -179,12 +181,95 @@ class EightfoldPcsxSource(JobSource):
         except Exception:
             return None
 
-    @staticmethod
-    def _description(row: dict) -> str | None:
-        value = row.get("jobDescription")
-        if not value:
+    @classmethod
+    def _description(cls, row: dict) -> str | None:
+        # Public Eightfold payloads are not perfectly uniform across tenants. The
+        # legacy first-party parser already handles these four field names; exact
+        # PCSx must do the same or a valid detail payload can be marked JD-less.
+        for key in cls.description_fields:
+            value = row.get(key)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            text = BeautifulSoup(value, "html.parser").get_text("\n", strip=True)
+            if text:
+                return text
+        return None
+
+    @classmethod
+    def _description_from_public_page(cls, origin: str, domain: str, row: dict, client) -> str | None:
+        """Last-resort first-party JD extraction from the public job page.
+
+        Some Eightfold tenants occasionally omit description text from
+        ``position_details`` while publishing it in JobPosting JSON-LD / embedded
+        JSON on the canonical job page. This fallback is used only for an India job
+        that remains description-less after detail hydration, so it does not add a
+        browser dependency or multiply requests for the normal case.
+        """
+        try:
+            url = cls._job_url(origin, domain, row)
+            response = client.get(
+                url,
+                headers={
+                    "Accept": "text/html,application/xhtml+xml",
+                    "User-Agent": "Mozilla/5.0 (compatible; job-fetcher/0.4; +first-party-careers-check)",
+                },
+                timeout=timeout_seconds(),
+                allow_redirects=True,
+            )
+            response.raise_for_status()
+            html = response.text
+            if not html:
+                return None
+            soup = BeautifulSoup(html, "html.parser")
+
+            def walk(value):
+                if isinstance(value, dict):
+                    yield value
+                    for child in value.values():
+                        yield from walk(child)
+                elif isinstance(value, list):
+                    for child in value:
+                        yield from walk(child)
+
+            for node in soup.find_all("script"):
+                typ = str(node.get("type") or "").casefold()
+                ident = str(node.get("id") or "").casefold()
+                if typ not in {"application/ld+json", "application/json"} and ident not in {
+                    "__next_data__",
+                    "__nuxt_data__",
+                }:
+                    continue
+                raw = node.string or node.get_text() or ""
+                if not raw.strip() or len(raw) > 12_000_000:
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    continue
+                for obj in walk(payload):
+                    description = cls._description(obj)
+                    if not description:
+                        continue
+                    obj_id = str(
+                        obj.get("id")
+                        or obj.get("positionId")
+                        or obj.get("jobId")
+                        or obj.get("identifier")
+                        or ""
+                    )
+                    obj_type = obj.get("@type")
+                    type_text = " ".join(obj_type) if isinstance(obj_type, list) else str(obj_type or "")
+                    # Prefer a matching requisition, but JobPosting JSON-LD on a
+                    # single-job page is also authoritative even when its identifier
+                    # is represented as a nested object.
+                    position_id = cls._identity(row) or ""
+                    if position_id and position_id in obj_id:
+                        return description
+                    if "jobposting" in type_text.casefold():
+                        return description
             return None
-        return BeautifulSoup(str(value), "html.parser").get_text("\n", strip=True) or None
+        except Exception:
+            return None
 
     @classmethod
     def _job_url(cls, origin: str, domain: str, row: dict) -> str:
@@ -289,13 +374,24 @@ class EightfoldPcsxSource(JobSource):
         jobs = []
         for position_id, listing in by_id.items():
             row = dict(listing)
-            if self._is_india(row) and not row.get("jobDescription"):
+            if self._is_india(row) and not self._description(row):
                 detail = self._detail(origin, domain, position_id)
                 if detail:
                     row.update(detail)
+                if self._description(row):
                     row["_pcsx_detail_hydrated"] = True
+                    row["_pcsx_description_source"] = "position_details"
                 else:
-                    row["_pcsx_detail_hydrated"] = False
+                    public_description = self._description_from_public_page(
+                        origin, domain, row, self._client
+                    )
+                    if public_description:
+                        row["jobDescription"] = public_description
+                        row["_pcsx_detail_hydrated"] = True
+                        row["_pcsx_description_source"] = "public_job_page"
+                    else:
+                        row["_pcsx_detail_hydrated"] = False
+                        row["_pcsx_description_source"] = "missing"
             row["_pcsx_completeness"] = evidence
             jobs.append(self._to_job(company, origin, domain, row))
         return jobs
