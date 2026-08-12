@@ -17,9 +17,10 @@ def test_factory_routes_current_provider_overrides():
     from job_fetcher.sources.auto import AutoSource
     from job_fetcher.sources.factory import build_source
     from job_fetcher.sources.phenom import PhenomSource
+    from job_fetcher.sources.phase2_exact import UberJobsApiSource
 
     assert isinstance(build_source(_company("amazon", "amazon")), AmazonSource)
-    assert isinstance(build_source(_company("uber", "auto")), AutoSource)
+    assert isinstance(build_source(_company("uber", "auto")), UberJobsApiSource)
     assert isinstance(build_source(_company("confluent", "auto")), AutoSource)
     assert isinstance(build_source(_company("snowflake", "phenom")), PhenomSource)
 
