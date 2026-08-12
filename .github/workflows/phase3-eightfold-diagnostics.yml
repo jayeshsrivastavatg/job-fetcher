@@ -1,9 +1,6 @@
 name: Phase 3 Eightfold Diagnostics
 
 on:
-  push:
-    branches:
-      - fix/phase3-eightfold-exact-coverage
   workflow_dispatch:
 
 permissions:
