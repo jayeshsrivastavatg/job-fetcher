@@ -25,6 +25,7 @@ _AUTHORITATIVE_JOB_FEEDS = {
     "smartrecruiters",
     "amazon_json",
     "cohesity_json",
+    "eightfold_pcsx",
 }
 
 # These are common careers-site navigation/category labels that the old generic

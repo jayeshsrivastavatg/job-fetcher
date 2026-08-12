@@ -1,0 +1,42 @@
+name: Phase 3 Exact Production Coverage
+
+on:
+  push:
+    branches:
+      - fix/phase3-eightfold-exact-coverage
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        company: [microsoft, twilio, morgan_stanley]
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install package
+        run: python -m pip install -U pip && pip install -e . pytest
+      - name: Unit tests
+        run: pytest -q tests/test_phase3_eightfold_pcsx.py tests/test_phase3_eightfold_duplicate_rows.py
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Verify every stable current official vacancy exists in production output
+        run: python scripts/verify_phase3_exact_production.py "${{ matrix.company }}"
+      - name: Upload exact coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-${{ matrix.company }}-exact-production
+          path: reports/phase3-${{ matrix.company }}-exact-production.json
+          if-no-files-found: warn
+          retention-days: 30

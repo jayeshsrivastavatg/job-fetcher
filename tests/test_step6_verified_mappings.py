@@ -3,7 +3,7 @@ import yaml
 
 from job_fetcher.config import validate_config
 from job_fetcher.sources.cohesity import CohesitySource
-from job_fetcher.sources.eightfold import EightfoldSource
+from job_fetcher.sources.eightfold_pcsx import EightfoldPcsxSource
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
 from job_fetcher.sources.servicenow import ServiceNowSource
@@ -72,7 +72,7 @@ def test_morgan_stanley_routing():
     ms = by["morgan_stanley"]
     assert ms["source"]["type"] == "eightfold"
     assert ms["source"]["tenant"] == "morganstanley"
-    assert isinstance(build_source(ms), EightfoldSource)
+    assert isinstance(build_source(ms), EightfoldPcsxSource)
 
 
 def test_public_listing_entry_points_are_specific():
