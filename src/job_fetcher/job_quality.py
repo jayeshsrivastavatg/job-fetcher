@@ -12,6 +12,20 @@ _ROLE_TITLE_RE = re.compile(
     re.I,
 )
 
+# These provider adapters consume actual vacancy/posting feeds rather than careers
+# page navigation. A short title such as "Security", "Support" or "Finance" can be
+# a real published requisition and must not be rejected by HTML-navigation
+# heuristics. Keep this list deliberately narrow: only sources whose adapter reads
+# an authoritative structured job collection belong here.
+_AUTHORITATIVE_JOB_FEEDS = {
+    "greenhouse",
+    "lever",
+    "ashby",
+    "workday",
+    "smartrecruiters",
+    "amazon_json",
+}
+
 # These are common careers-site navigation/category labels that the old generic
 # extractor incorrectly stored as jobs simply because their URL contained
 # /careers/ or because the label contained a broad word such as "data", "sales"
@@ -112,6 +126,14 @@ def plausible_job(job) -> bool:
     if not title:
         return False
 
+    source_type = str(getattr(job, "source_type", "") or "").strip().casefold()
+    if source_type in _AUTHORITATIVE_JOB_FEEDS:
+        # These adapters already crossed the important trust boundary: their input
+        # collection consists of published vacancies. Navigation-label heuristics
+        # are for HTML/link discovery and would incorrectly delete legitimate
+        # unusually named requisitions from an authoritative feed.
+        return True
+
     url = str(getattr(job, "job_url", "") or "").strip()
     if title.casefold().strip(" :–—-") in _ACTION_ONLY:
         return False
@@ -123,13 +145,12 @@ def plausible_job(job) -> bool:
     if _looks_like_navigation_title(title):
         return False
 
-    source_type = str(getattr(job, "source_type", "") or "")
     if _HTMLISH_SOURCE_RE.search(source_type):
         # Generic HTML extraction is the dangerous case: require an actual role
         # noun when the URL itself is not a concrete vacancy URL.
         return role_title_like(title)
 
-    # Structured provider/API records are trusted unless they matched an explicit
+    # Other structured/API records are trusted unless they matched an explicit
     # navigation/action rule above.
     return True
 
