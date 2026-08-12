@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from bs4 import BeautifulSoup
+from requests import HTTPError, RetryError
 
 from job_fetcher.models import Job
 from job_fetcher.sources.base import JobSource
@@ -11,21 +14,34 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 
 
 class EightfoldPcsxSource(JobSource):
-    """Read the public PCS JSON inventory used by an Eightfold careers page.
+    """Read the complete public PCS inventory used by an Eightfold careers page.
 
-    The branded Eightfold UI calls ``/api/pcsx/search`` with an offset named
-    ``start``.  The response reports the full board ``count`` and returns stable
-    position IDs.  This adapter walks the complete public inventory and fails
-    closed if pagination stops making progress before the reported count.
+    The employer UI calls ``/api/pcsx/search`` with an offset named ``start``.
+    Eightfold currently caps this public search endpoint at 10 rows per request, so
+    large employers require hundreds of requests.  We deliberately pace those
+    requests and use long 429 backoff rather than hammering the careers service.
 
-    Listing completeness and JD hydration are deliberately separate concerns:
-    every published listing is retained even if an optional detail request fails.
-    India listings are hydrated from the public ``position_details`` endpoint so
-    the downstream India/relevance pipeline has the full job description without
-    requiring thousands of unnecessary detail calls for foreign roles.
+    The response reports the current full-board ``count`` and stable position IDs.
+    We walk every offset, union stable IDs across a second pass when live-board
+    mutation shifts offsets, and fail closed if the current reported inventory is
+    still not covered.
+
+    Listing completeness and JD hydration are separate.  Every published listing
+    is retained; India listings are additionally hydrated from the public
+    ``position_details`` endpoint so downstream relevance/AI receives the full JD.
     """
 
     source_type = "eightfold_pcsx"
+    page_size = 10
+
+    def __init__(self):
+        self._client = session()
+        self._last_request_at = 0.0
+        self._pace_seconds = max(
+            0.0,
+            float(os.getenv("JOB_FETCHER_EIGHTFOLD_PACE_SECONDS", "0.75")),
+        )
+        self._rate_limit_backoffs = (4.0, 8.0, 16.0, 32.0)
 
     @staticmethod
     def _entry(company: dict) -> str:
@@ -59,21 +75,60 @@ class EightfoldPcsxSource(JobSource):
             raise RuntimeError("eightfold_pcsx_missing_positions")
         return data
 
+    def _pace(self) -> None:
+        if self._pace_seconds <= 0:
+            return
+        elapsed = time.monotonic() - self._last_request_at
+        remaining = self._pace_seconds - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+    @staticmethod
+    def _looks_rate_limited(exc: Exception) -> bool:
+        response = getattr(exc, "response", None)
+        if response is not None and getattr(response, "status_code", None) == 429:
+            return True
+        return "429" in str(exc) or "too many" in str(exc).casefold()
+
+    def _get_json(self, url: str, *, params: dict) -> dict:
+        last_exc: Exception | None = None
+        attempts = 1 + len(self._rate_limit_backoffs)
+        for attempt in range(attempts):
+            self._pace()
+            try:
+                response = self._client.get(
+                    url,
+                    params=params,
+                    headers={"Accept": "application/json"},
+                    timeout=timeout_seconds(),
+                )
+                self._last_request_at = time.monotonic()
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise RuntimeError("eightfold_pcsx_invalid_json_object")
+                return payload
+            except (RetryError, HTTPError) as exc:
+                self._last_request_at = time.monotonic()
+                last_exc = exc
+                if not self._looks_rate_limited(exc) or attempt >= len(self._rate_limit_backoffs):
+                    raise
+                time.sleep(self._rate_limit_backoffs[attempt])
+        raise RuntimeError(f"eightfold_pcsx_rate_limit_exhausted:{last_exc}")
+
     def _page(self, origin: str, domain: str, start: int) -> tuple[list[dict], int]:
-        response = session().get(
+        payload = self._get_json(
             f"{origin}/api/pcsx/search",
             params={
                 "domain": domain,
                 "query": "",
                 "location": "",
                 "start": int(start),
+                "page_size": self.page_size,
                 "hl": "en",
             },
-            headers={"Accept": "application/json"},
-            timeout=timeout_seconds(),
         )
-        response.raise_for_status()
-        data = self._payload_data(response.json())
+        data = self._payload_data(payload)
         rows = [row for row in data.get("positions") or [] if isinstance(row, dict)]
         try:
             count = int(data.get("count") or 0)
@@ -85,16 +140,10 @@ class EightfoldPcsxSource(JobSource):
 
     def _detail(self, origin: str, domain: str, position_id: str) -> dict | None:
         try:
-            response = session().get(
+            payload = self._get_json(
                 f"{origin}/api/pcsx/position_details",
                 params={"position_id": position_id, "domain": domain, "hl": "en"},
-                headers={"Accept": "application/json"},
-                timeout=timeout_seconds(),
             )
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, dict):
-                return None
             data = payload.get("data")
             return data if isinstance(data, dict) and str(data.get("id") or "") == position_id else None
         except Exception:
@@ -173,25 +222,24 @@ class EightfoldPcsxSource(JobSource):
             raw=row,
         )
 
-    def enumerate_rows(self, company: dict) -> tuple[dict[str, dict], dict]:
-        origin, domain, _entry = self.contract(company)
+    def _walk_once(self, origin: str, domain: str, target_count: int | None = None) -> tuple[dict[str, dict], int, int]:
         by_id: dict[str, dict] = {}
         seen_page_fingerprints: set[tuple[str, ...]] = set()
         start = 0
-        max_count = 0
+        current_count = max(0, int(target_count or 0))
         pages = 0
 
-        while True:
+        while pages == 0 or start < current_count:
             rows, count = self._page(origin, domain, start)
             pages += 1
-            max_count = max(max_count, count)
+            current_count = count
             ids = tuple(self._identity(row) or "" for row in rows)
             fingerprint = tuple(value for value in ids if value)
 
             if not rows:
-                if len(by_id) >= max_count:
+                if start >= current_count:
                     break
-                raise RuntimeError(f"eightfold_pcsx_premature_empty:{len(by_id)}/{max_count}@{start}")
+                raise RuntimeError(f"eightfold_pcsx_premature_empty:{len(by_id)}/{current_count}@{start}")
             if not fingerprint:
                 raise RuntimeError(f"eightfold_pcsx_page_without_ids:{start}")
             if fingerprint in seen_page_fingerprints:
@@ -202,47 +250,37 @@ class EightfoldPcsxSource(JobSource):
                 position_id = self._identity(row)
                 if position_id:
                     by_id[position_id] = row
-
             start += len(rows)
-            # Count can grow while we enumerate. Every page reports a current count,
-            # so always chase the largest count observed instead of freezing page 1.
-            if start >= max_count:
-                _tail_rows, final_count = self._page(origin, domain, start)
-                pages += 1
-                max_count = max(max_count, final_count)
-                if start >= max_count:
-                    break
 
             if pages > 10000:
                 raise RuntimeError("eightfold_pcsx_pagination_guard")
 
-        # Offset pagination can shift when jobs open/close mid-run. If that caused
-        # duplicate rows and left us below the provider's own current count, perform
-        # one second pass and union stable IDs. Extras are safer than missing jobs.
-        if len(by_id) < max_count:
-            start = 0
-            second_seen: set[tuple[str, ...]] = set()
-            while start < max_count:
-                rows, count = self._page(origin, domain, start)
-                max_count = max(max_count, count)
-                ids = tuple(self._identity(row) or "" for row in rows)
-                fingerprint = tuple(value for value in ids if value)
-                if not rows or not fingerprint or fingerprint in second_seen:
-                    break
-                second_seen.add(fingerprint)
-                for row in rows:
-                    position_id = self._identity(row)
-                    if position_id:
-                        by_id[position_id] = row
-                start += len(rows)
+        return by_id, current_count, pages
 
-        if len(by_id) < max_count:
-            raise RuntimeError(f"eightfold_pcsx_incomplete:{len(by_id)}/{max_count}")
+    def enumerate_rows(self, company: dict) -> tuple[dict[str, dict], dict]:
+        origin, domain, _entry = self.contract(company)
+        first_rows, first_count, first_pages = self._walk_once(origin, domain)
+        by_id = dict(first_rows)
+        reported_count = first_count
+        pages = first_pages
+
+        # Offset pagination can shift when vacancies open/close while the board is
+        # being walked. If the first pass is below the provider's current count,
+        # walk once more and union stable IDs. Extras are safe; missing current IDs
+        # are not.
+        if len(by_id) < reported_count:
+            second_rows, second_count, second_pages = self._walk_once(origin, domain, reported_count)
+            pages += second_pages
+            by_id.update(second_rows)
+            reported_count = second_count
+
+        if len(by_id) < reported_count:
+            raise RuntimeError(f"eightfold_pcsx_incomplete:{len(by_id)}/{reported_count}")
 
         return by_id, {
             "origin": origin,
             "domain": domain,
-            "reported_count": max_count,
+            "reported_count": reported_count,
             "unique_count": len(by_id),
             "pagination_exhausted": True,
             "pages_requested": pages,
@@ -255,9 +293,6 @@ class EightfoldPcsxSource(JobSource):
         jobs = []
         for position_id, listing in by_id.items():
             row = dict(listing)
-            # Hydrate India jobs only. Full-board enumeration stays fast while all
-            # candidate-facing India roles carry the complete official JD when the
-            # detail endpoint is available.
             if self._is_india(row) and not row.get("jobDescription"):
                 detail = self._detail(origin, domain, position_id)
                 if detail:
