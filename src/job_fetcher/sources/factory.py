@@ -66,11 +66,11 @@ def build_source(company):
     company_id = str(company.get("id") or "")
 
     # Phase 3: these employers' own careers pages are powered by the public PCS
-    # search JSON endpoint. Read that exact full inventory instead of HTML recovery,
-    # Greenhouse fallback, or browser scrolling.
+    # search JSON endpoint. Read the exact full result-row space, preserve each
+    # stable vacancy ID, and explicitly handle provider rows that repeat one ID.
     if company_id in {"microsoft", "twilio", "morgan_stanley"}:
-        from job_fetcher.sources.eightfold_pcsx import EightfoldPcsxSource
-        return EightfoldPcsxSource()
+        from job_fetcher.sources.eightfold_pcsx_exhaustive import EightfoldPcsxExhaustiveSource
+        return EightfoldPcsxExhaustiveSource()
 
     # Phase 2 exact sources use first-party inventories when one is enumerable.
     # Navi is intentionally fail-closed: its branded careers surface is access
