@@ -56,17 +56,16 @@ def build_raw_source(company):
 
 
 def build_source(company):
-    """Return the configured adapter, enhanced with recovery where necessary.
+    """Return the most authoritative known adapter for this company.
 
-    Recovery wrappers subclass the configured adapter, so existing diagnostics and
-    type expectations remain valid while actual fetches get hardened first-party
-    fallback paths.
+    Structured/provider contracts are preferred over branded-page HTML heuristics.
+    Generic/recovery extraction is used only when no verified source contract is
+    registered for the company.
     """
     company_id = str(company.get("id") or "")
 
     # A few employers have moved to a cleaner public provider/API than the source
-    # originally discovered for their branded career page. Keep these overrides
-    # isolated so they are easy to remove if the employer changes providers again.
+    # originally discovered for their branded career page.
     if company_id in {"amazon", "uber", "snowflake", "confluent"}:
         from job_fetcher.sources.current_provider_overrides import (
             AmazonJsonSource,
@@ -82,9 +81,14 @@ def build_source(company):
         }
         return current[company_id]()
 
+    # Promote companies whose branded pages are already known to be backed by a
+    # structured ATS. Once a contract is known we deliberately do not fall back to
+    # arbitrary page-link extraction: a loud provider failure is safer than fake jobs.
+    from job_fetcher.sources.known_provider_overrides import KNOWN_PROVIDER_CONFIGS, KnownProviderSource
+    if company_id in KNOWN_PROVIDER_CONFIGS:
+        return KnownProviderSource()
+
     # `allow_zero_jobs` means an explicit "no openings" page is a valid result.
-    # Check that signal before generic extraction can mistake navigation links for
-    # vacancies (Zerodha is the current example).
     source = company.get("source") or {}
     if source.get("type") == "auto" and source.get("allow_zero_jobs"):
         from job_fetcher.sources.zero_aware_auto import ZeroAwareAutoSource
