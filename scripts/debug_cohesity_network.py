@@ -10,6 +10,21 @@ ENTRY = "https://careers.cohesity.com/open-positions/"
 KEY_RE = re.compile(r"(job|career|workday|wday|greenhouse|api|position|requisition|opening)", re.I)
 
 
+def summarize(value):
+    if isinstance(value, list):
+        summary = {"type": "list", "length": len(value)}
+        if value:
+            first = value[0]
+            summary["first_type"] = type(first).__name__
+            if isinstance(first, dict):
+                summary["first_keys"] = sorted(first.keys())
+                summary["first_record"] = first
+        return summary
+    if isinstance(value, dict):
+        return {"type": "dict", "keys": sorted(value.keys()), "sample": dict(list(value.items())[:3])}
+    return {"type": type(value).__name__, "value": value}
+
+
 def main():
     seen = set()
     rows = []
@@ -37,10 +52,9 @@ def main():
                         payload = resp.json()
                         if isinstance(payload, dict):
                             item["json_keys"] = sorted(payload.keys())[:40]
-                            for k in ("total", "totalFound", "count", "jobs", "jobPostings", "items", "results", "data"):
+                            for k in ("total", "totalFound", "count", "jobs", "jobPostings", "items", "results", "data", "job_data", "careerSiteDeptList", "locationsByCountry"):
                                 if k in payload:
-                                    value = payload[k]
-                                    item[f"field_{k}"] = len(value) if isinstance(value, list) else (list(value.keys())[:20] if isinstance(value, dict) else value)
+                                    item[f"field_{k}"] = summarize(payload[k])
                         elif isinstance(payload, list):
                             item["json_list_length"] = len(payload)
                     except Exception as exc:
@@ -61,21 +75,9 @@ def main():
 
         print("PAGE_URL", page.url)
         print("TITLE", page.title())
-        print("IFRAMES")
-        for frame in page.frames:
-            print(" ", frame.url)
-        print("SCRIPT_SRCS")
-        try:
-            scripts = page.locator("script[src]")
-            for i in range(scripts.count()):
-                src = scripts.nth(i).get_attribute("src") or ""
-                if KEY_RE.search(src) or "cohesity" not in urlparse(src).netloc.lower():
-                    print(" ", src)
-        except Exception:
-            pass
         print("NETWORK")
         for row in rows:
-            print(json.dumps(row, ensure_ascii=False))
+            print(json.dumps(row, ensure_ascii=False, default=str))
         browser.close()
 
 
