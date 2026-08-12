@@ -7,6 +7,7 @@ from copy import deepcopy
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 from job_fetcher.models import Job
 from job_fetcher.sources.base import JobSource
@@ -18,6 +19,7 @@ from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
 _BASE = "https://careers.servicenow.com/jobs/"
 _JOB_RE = re.compile(r"/jobs/(?P<id>\d{8,})/", re.I)
 _TOTAL_RE = re.compile(r"\bof\s+([\d,]+)\s+matching jobs\b", re.I)
+_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36"
 
 
 def _clean(value):
@@ -32,13 +34,15 @@ def _numeric_id(value):
 class ServiceNowSource(JobSource):
     """SmartRecruiters first, official ServiceNow careers site as a coverage guard.
 
-    ServiceNow's employer site can contain current vacancies that are absent from
-    the public SmartRecruiters company listing. The public API remains the primary
-    structured source, but a fetch is not complete unless every current vacancy
-    enumerated on careers.servicenow.com is represented in the returned set.
+    ServiceNow's employer site has been observed publishing current vacancies that
+    are absent from the public SmartRecruiters company listing. SmartRecruiters
+    remains the primary structured API, but the fetch is accepted only when every
+    current vacancy on careers.servicenow.com is present in the returned set.
 
-    Extra API jobs are deliberately retained; the required invariant is
-    official_website_jobs <= returned_jobs.
+    The employer job board is server-rendered for a browser. Plain requests receive
+    the first page even for later page parameters, so exhaustive enumeration uses
+    Chromium with a fresh browser context per page. Extra API jobs are deliberately
+    retained: the required invariant is official_website_jobs <= returned_jobs.
     """
 
     def fetch(self, company):
@@ -46,9 +50,13 @@ class ServiceNowSource(JobSource):
         provider_company["source"] = {"type": "smartrecruiters", "company_identifier": "ServiceNow"}
         provider_jobs = list(SmartRecruitersSource().fetch(provider_company) or [])
 
-        website_records, expected = self._enumerate_official_site()
-        if expected is None:
+        website_records, expected, final_total = self._enumerate_official_site()
+        if expected is None or final_total is None:
             raise RuntimeError("servicenow_website_total_unavailable")
+        if expected != final_total:
+            raise RuntimeError(
+                f"servicenow_website_changed_during_fetch: before={expected} after={final_total}"
+            )
         if len(website_records) < expected:
             raise RuntimeError(
                 f"servicenow_website_incomplete_pagination: expected={expected} enumerated={len(website_records)}"
@@ -63,15 +71,6 @@ class ServiceNowSource(JobSource):
         missing = [record for jid, record in website_records.items() if jid not in by_numeric_id]
         supplements = [self._fetch_official_detail(company, record) for record in missing]
 
-        # Re-read the first website page after the potentially long crawl. If the
-        # board changed during the fetch, fail closed instead of blessing a moving
-        # snapshot. The next run will naturally retry with the new inventory.
-        final_total = self._official_total()
-        if final_total != expected:
-            raise RuntimeError(
-                f"servicenow_website_changed_during_fetch: before={expected} after={final_total}"
-            )
-
         out = provider_jobs + supplements
         returned_ids = {
             _numeric_id(getattr(job, "external_id", None)) or _numeric_id(getattr(job, "job_url", None))
@@ -85,70 +84,97 @@ class ServiceNowSource(JobSource):
             )
         return out
 
-    def _official_total(self):
-        client = session()
-        response = client.get(
-            _BASE,
-            params={"page": 1, "pagesize": 20, "audit": int(time.time() * 1000)},
-            timeout=timeout_seconds(),
-            headers={"User-Agent": "Mozilla/5.0 PersonalJobFetcher/0.4"},
-        )
-        response.raise_for_status()
-        text = BeautifulSoup(response.text, "html.parser").get_text(" ", strip=True)
-        match = _TOTAL_RE.search(text)
-        return int(match.group(1).replace(",", "")) if match else None
+    @staticmethod
+    def _parse_browser_page(page):
+        body = page.locator("body").inner_text(timeout=10000)
+        total_match = _TOTAL_RE.search(body)
+        total = int(total_match.group(1).replace(",", "")) if total_match else None
+
+        records = {}
+        anchors = page.locator("a[href]")
+        for index in range(anchors.count()):
+            anchor = anchors.nth(index)
+            try:
+                href = urljoin(page.url, anchor.get_attribute("href") or "")
+                title = _clean(anchor.inner_text(timeout=800))
+            except Exception:
+                continue
+            match = _JOB_RE.search(urlparse(href).path + "/")
+            if not match or not title:
+                continue
+            jid = match.group("id")
+            records[jid] = {"id": jid, "title": title, "url": href}
+        return total, records
 
     def _enumerate_official_site(self):
-        client = session()
         records = {}
-        expected = None
-        seen_page_fingerprints = set()
+        totals = []
         max_pages = 80
 
-        for page_number in range(1, max_pages + 1):
-            response = client.get(
-                _BASE,
-                params={"page": page_number, "pagesize": 20, "audit": f"{int(time.time() * 1000)}-{page_number}"},
-                timeout=timeout_seconds(),
-                headers={"User-Agent": "Mozilla/5.0 PersonalJobFetcher/0.4"},
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+
+            # The first page establishes the official display total. A fresh
+            # context avoids sticky state/cached pagination from previous pages.
+            context = browser.new_context(user_agent=_USER_AGENT, locale="en-US")
+            page = context.new_page()
+            page.goto(
+                f"{_BASE}?page=1&pagesize=20&audit={int(time.time() * 1000)}",
+                wait_until="domcontentloaded", timeout=90000,
             )
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, "html.parser")
+            page.wait_for_timeout(500)
+            expected, first_records = self._parse_browser_page(page)
+            context.close()
             if expected is None:
-                total_match = _TOTAL_RE.search(soup.get_text(" ", strip=True))
-                expected = int(total_match.group(1).replace(",", "")) if total_match else None
-                if expected is None:
-                    return {}, None
+                browser.close()
+                return {}, None, None
+            totals.append(expected)
+            records.update(first_records)
 
-            page_records = {}
-            for anchor in soup.select("a[href]"):
-                href = urljoin(response.url, anchor.get("href") or "")
-                match = _JOB_RE.search(urlparse(href).path + "/")
-                if not match:
-                    continue
-                title = _clean(anchor.get_text(" ", strip=True))
-                if not title:
-                    continue
-                jid = match.group("id")
-                page_records[jid] = {"id": jid, "title": title, "url": href}
+            expected_pages = min(max_pages, math.ceil(expected / 20) + 2)
+            for page_number in range(2, expected_pages + 1):
+                best_records = {}
+                page_total = None
 
-            fingerprint = tuple(sorted(page_records))
-            if not page_records:
-                break
-            if fingerprint in seen_page_fingerprints:
-                # The server ignored pagination. Continuing would create false
-                # confidence, so fail through the count check below.
-                break
-            seen_page_fingerprints.add(fingerprint)
-            records.update(page_records)
+                # The employer board occasionally serves a stale/repeated page.
+                # Retry each page with a brand-new context and cache-busting value;
+                # accept the attempt as soon as it contributes unseen posting IDs.
+                for attempt in range(3):
+                    context = browser.new_context(user_agent=_USER_AGENT, locale="en-US")
+                    page = context.new_page()
+                    page.goto(
+                        f"{_BASE}?page={page_number}&pagesize=20&audit={int(time.time() * 1000)}-{attempt}",
+                        wait_until="domcontentloaded", timeout=90000,
+                    )
+                    page.wait_for_timeout(450 + attempt * 200)
+                    page_total, current = self._parse_browser_page(page)
+                    context.close()
+                    if len(current) > len(best_records):
+                        best_records = current
+                    if set(current) - set(records):
+                        break
+                    time.sleep(0.25)
 
-            if len(records) >= expected:
-                break
-            if page_number >= math.ceil(expected / 20) + 2:
-                break
-            time.sleep(0.05)
+                if page_total is not None:
+                    totals.append(page_total)
+                records.update(best_records)
+                if len(records) >= expected:
+                    break
 
-        return records, expected
+            # Boundary re-read prevents a moving board from receiving a false
+            # completeness guarantee.
+            context = browser.new_context(user_agent=_USER_AGENT, locale="en-US")
+            page = context.new_page()
+            page.goto(
+                f"{_BASE}?page=1&pagesize=20&audit=final-{int(time.time() * 1000)}",
+                wait_until="domcontentloaded", timeout=90000,
+            )
+            page.wait_for_timeout(450)
+            final_total, _ = self._parse_browser_page(page)
+            context.close()
+            browser.close()
+
+        return records, expected, final_total
 
     def _fetch_official_detail(self, company, record):
         client = session()
