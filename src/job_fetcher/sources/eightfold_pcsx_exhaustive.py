@@ -16,12 +16,16 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
     was requested.
 
     Exact mode therefore performs several complete row-space walks and unions every
-    stable position ID it sees. Each individual walk must still exhaust the full
-    provider-reported row space or it fails closed. We intentionally do *not* wait
-    for the board to stop changing: employers such as Microsoft can add/remove jobs
-    continuously, making a global quiescent snapshot impossible. The independent
-    exact verifier brackets production with separate official snapshots and only
-    requires IDs that are present across the verification window.
+    stable position ID it sees. For very large/high-churn boards (currently
+    Microsoft), each walk also overlaps adjacent provider pages by 50%. That makes
+    an insertion/removal at an earlier offset unable to create a silent hole at a
+    normal 10-row page boundary. Each individual walk must still reach the entire
+    provider-reported row space or it fails closed.
+
+    We intentionally do *not* wait for the board to stop changing: employers can
+    add/remove jobs continuously. The independent exact verifier brackets production
+    with separate official snapshots and requires every vacancy that remains present
+    across the verification window to be in production output.
 
     This deliberately prefers a few extras from adjacent snapshots over silently
     missing a current vacancy, matching the product trust rule: extras are allowed;
@@ -36,6 +40,7 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             2,
             int(os.getenv("JOB_FETCHER_EIGHTFOLD_FULL_PASSES", "3")),
         )
+        self._page_stride = self.page_size
 
     @staticmethod
     def _merge_list(left, right):
@@ -69,6 +74,7 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
         current_count = 0
         pages = 0
         raw_rows = 0
+        furthest_covered_offset = 0
 
         while pages == 0 or start < current_count:
             rows, count = self._page(origin, domain, start)
@@ -98,14 +104,23 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
                 by_id[position_id] = self._merge_row(by_id.get(position_id), row)
 
             raw_rows += len(rows)
-            start += len(rows)
+            furthest_covered_offset = max(furthest_covered_offset, start + len(rows))
+
+            # Eightfold currently returns at most ten rows. On Microsoft we use a
+            # five-row stride, intentionally re-reading half of every adjacent page.
+            # For normal boards stride equals page size, preserving the cheaper walk.
+            step = min(len(rows), max(1, int(self._page_stride)))
+            start += step
             if pages > 10000:
                 raise RuntimeError("eightfold_pcsx_pagination_guard")
 
-        # ``count`` is the number of result rows, not the number of unique IDs.
-        # Still, every reported result-row offset must have been consumed.
-        if raw_rows < current_count:
-            raise RuntimeError(f"eightfold_pcsx_row_space_incomplete:{raw_rows}/{current_count}")
+        # With overlap, raw_rows is intentionally larger than provider count. What
+        # matters for row-space exhaustion is that a returned page covered the final
+        # provider offset; without overlap these quantities are equivalent.
+        if furthest_covered_offset < current_count:
+            raise RuntimeError(
+                f"eightfold_pcsx_row_space_incomplete:{furthest_covered_offset}/{current_count}"
+            )
 
         duplicate_ids = {
             position_id: occurrences
@@ -120,10 +135,19 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             "duplicate_ids": duplicate_ids,
             "duplicate_row_occurrences": raw_rows - len(by_id),
             "pages_requested": pages,
+            "furthest_covered_offset": furthest_covered_offset,
+            "page_stride": self._page_stride,
         }
 
     def enumerate_rows(self, company: dict) -> tuple[dict[str, dict], dict]:
         origin, domain, _entry = self.contract(company)
+
+        # Microsoft is both very large and highly active. Its result ordering moves
+        # enough during a full walk that non-overlapping offsets were empirically
+        # shown to omit stable vacancies. Half-page overlap removes that boundary
+        # failure mode while the multi-pass union handles wider live-board mutation.
+        self._page_stride = max(1, self.page_size // 2) if company.get("id") == "microsoft" else self.page_size
+
         by_id: dict[str, dict] = {}
         passes: list[dict] = []
         pass_evidence: list[dict] = []
@@ -144,6 +168,8 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
                 "pass": pass_number,
                 "reported_count": snapshot["reported_count"],
                 "provider_row_count": snapshot["raw_rows"],
+                "furthest_covered_offset": snapshot["furthest_covered_offset"],
+                "page_stride": snapshot["page_stride"],
                 "unique_in_pass": snapshot["unique_count"],
                 "new_ids_added": len(new_ids),
                 "prior_ids_not_seen_this_pass": len(prior_ids_not_seen_this_pass),
@@ -160,11 +186,13 @@ class EightfoldPcsxExhaustiveSource(EightfoldPcsxSource):
             "domain": domain,
             "reported_count": final["reported_count"],
             "provider_row_count": final["raw_rows"],
+            "furthest_covered_offset": final["furthest_covered_offset"],
+            "page_stride": final["page_stride"],
             "unique_count": len(by_id),
             "duplicate_row_occurrences": final["duplicate_row_occurrences"],
             "duplicate_id_count": len(final["duplicate_ids"]),
             "duplicate_ids_sample": dict(list(final["duplicate_ids"].items())[:25]),
-            "pagination_exhausted": True,
+            "pagination_exhausted": final["furthest_covered_offset"] >= final["reported_count"],
             "board_mutated_during_fetch": board_mutated,
             "passes": len(passes),
             "pages_requested": sum(item["pages_requested"] for item in passes),
