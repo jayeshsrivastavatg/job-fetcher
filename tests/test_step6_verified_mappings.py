@@ -2,10 +2,11 @@ from pathlib import Path
 import yaml
 
 from job_fetcher.config import validate_config
+from job_fetcher.sources.cohesity import CohesitySource
 from job_fetcher.sources.eightfold import EightfoldSource
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
-from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
+from job_fetcher.sources.servicenow import ServiceNowSource
 from job_fetcher.sources.workday import WorkdaySource
 
 
@@ -43,7 +44,6 @@ def test_verified_workday_mappings():
         "walmart_global_tech": ("walmart.wd504.myworkdayjobs.com", "walmart", "WalmartExternal"),
         "adobe": ("adobe.wd5.myworkdayjobs.com", "adobe", "external_experienced"),
         "paypal": ("paypal.wd1.myworkdayjobs.com", "paypal", "jobs"),
-        "cohesity": ("cohesity.wd5.myworkdayjobs.com", "cohesity", "Cohesity_Careers"),
     }
     for cid, (host, tenant, site) in expected.items():
         c = by[cid]
@@ -52,16 +52,27 @@ def test_verified_workday_mappings():
         assert isinstance(build_source(c), WorkdaySource)
 
 
-def test_morgan_stanley_and_servicenow_routing():
+def test_phase1_exact_coverage_overrides_old_provider_routes():
+    _, by = _by_id()
+
+    # Config keeps the previously known provider metadata for traceability, but
+    # production now uses stronger sources proven against the official employer
+    # careers inventory.
+    cohesity = by["cohesity"]
+    assert cohesity["source"]["type"] == "workday"
+    assert isinstance(build_source(cohesity), CohesitySource)
+
+    servicenow = by["servicenow"]
+    assert servicenow["source"] == {"type": "smartrecruiters", "company_identifier": "ServiceNow"}
+    assert isinstance(build_source(servicenow), ServiceNowSource)
+
+
+def test_morgan_stanley_routing():
     _, by = _by_id()
     ms = by["morgan_stanley"]
     assert ms["source"]["type"] == "eightfold"
     assert ms["source"]["tenant"] == "morganstanley"
     assert isinstance(build_source(ms), EightfoldSource)
-
-    sn = by["servicenow"]
-    assert sn["source"] == {"type": "smartrecruiters", "company_identifier": "ServiceNow"}
-    assert isinstance(build_source(sn), SmartRecruitersSource)
 
 
 def test_public_listing_entry_points_are_specific():
