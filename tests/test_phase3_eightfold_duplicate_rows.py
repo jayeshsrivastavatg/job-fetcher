@@ -31,9 +31,9 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     source = EightfoldPcsxExhaustiveSource()
     passes = {"number": 0}
 
-    # The provider reports 4 result rows, but ID 2 appears twice. This is three
-    # unique vacancies, not one missing vacancy. Exact mode now requires two
-    # consecutive no-new-ID passes after the baseline, hence three full passes.
+    # The provider reports four result rows, but ID 2 appears twice. That is three
+    # vacancies. Exact mode performs three complete row-space walks and merges the
+    # duplicate location information without treating the repeated row as missing.
     def fake_page(origin, domain, start):
         if start == 0:
             passes["number"] += 1
@@ -51,14 +51,15 @@ def test_provider_count_can_include_repeated_rows_for_one_vacancy(monkeypatch):
     assert evidence["provider_row_count"] == 4
     assert evidence["duplicate_row_occurrences"] == 1
     assert evidence["duplicate_id_count"] == 1
-    assert evidence["converged"] is True
     assert evidence["passes"] == 3
     assert passes["number"] == 3
+    assert evidence["board_mutated_during_fetch"] is False
     assert rows["2"]["locations"] == ["Mumbai, India", "Bengaluru, India"]
 
 
-def test_convergence_recovers_job_hidden_by_live_offset_shift(monkeypatch):
+def test_multi_pass_union_recovers_job_hidden_by_live_offset_shift(monkeypatch):
     source = EightfoldPcsxExhaustiveSource()
+    source._full_passes = 3
     snapshots = [
         # First walk looks complete by row count but misses stable ID 4 because the
         # board shifted while offsets were being traversed.
@@ -66,7 +67,6 @@ def test_convergence_recovers_job_hidden_by_live_offset_shift(monkeypatch):
         # A later full walk exposes ID 4. ID 1 is absent from this one pass, which
         # is fine because extras/union are intentional.
         {"2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
-        {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
         {"1": _row(1, "US"), "2": _row(2, "India"), "3": _row(3, "UK"), "4": _row(4, "India")},
     ]
     index = {"value": 0}
@@ -88,15 +88,15 @@ def test_convergence_recovers_job_hidden_by_live_offset_shift(monkeypatch):
     rows, evidence = source.enumerate_rows(_company())
 
     assert set(rows) == {"1", "2", "3", "4"}
-    assert evidence["passes"] == 4
+    assert evidence["passes"] == 3
+    assert evidence["board_mutated_during_fetch"] is True
     assert evidence["pass_evidence"][1]["new_ids_added"] == 1
-    assert evidence["pass_evidence"][2]["new_ids_added"] == 0
-    assert evidence["pass_evidence"][3]["new_ids_added"] == 0
+    assert evidence["pass_evidence"][1]["prior_ids_not_seen_this_pass"] == 1
 
 
-def test_convergence_fails_closed_if_every_pass_keeps_discovering_jobs(monkeypatch):
+def test_continuously_mutating_board_returns_bounded_union_with_evidence(monkeypatch):
     source = EightfoldPcsxExhaustiveSource()
-    source._max_convergence_passes = 4
+    source._full_passes = 3
     counter = {"value": 0}
 
     def fake_walk(origin, domain):
@@ -114,8 +114,12 @@ def test_convergence_fails_closed_if_every_pass_keeps_discovering_jobs(monkeypat
         }
 
     monkeypatch.setattr(source, "_walk_exact_once", fake_walk)
-    with pytest.raises(RuntimeError, match="inventory_did_not_converge"):
-        source.enumerate_rows(_company())
+    rows, evidence = source.enumerate_rows(_company())
+
+    assert set(rows) == {"1", "2", "3"}
+    assert evidence["passes"] == 3
+    assert evidence["board_mutated_during_fetch"] is True
+    assert [x["new_ids_added"] for x in evidence["pass_evidence"]] == [1, 1, 1]
 
 
 def test_exhaustive_walker_fails_if_provider_row_space_is_not_consumed(monkeypatch):
