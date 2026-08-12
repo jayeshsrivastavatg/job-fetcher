@@ -20,38 +20,21 @@ def summarize(value, depth=0):
 
 def uber():
     base = "https://jobs.uber.com/api/jobs/search/"
-    for params in (
-        {"pagesize": 100},
-        {"pagesize": 100, "page": 1},
-        {"pagesize": 100, "page": 2},
-        {"pagesize": 100, "page": 3},
-        {"pagesize": 1, "page": 1},
-    ):
+    for params in ({"pagesize": 100, "page": 1}, {"pagesize": 100, "page": 2}, {"pagesize": 100, "page": 7}):
         r = requests.get(base, params=params, headers=UA, timeout=30)
-        print("UBER", r.url, r.status_code, r.headers.get("content-type"), flush=True)
         r.raise_for_status()
         data = r.json()
-        jobs = data.get("jobs") if isinstance(data, dict) else None
-        print("UBER_SHAPE", json.dumps(summarize(data), ensure_ascii=False)[:10000], flush=True)
-        if isinstance(jobs, list):
-            ids = []
-            for row in jobs[:8]:
-                if isinstance(row, dict):
-                    ids.append({k: row.get(k) for k in row if re.search(r"(^id$|job.*id|requisition|title|location|city|country)", k, re.I)})
-            print("UBER_ROWS", json.dumps(ids, ensure_ascii=False)[:10000], flush=True)
+        print("UBER", r.url, json.dumps({k: data.get(k) for k in ("totalPages", "totalJobs", "page", "pageSize")}), "jobs", len(data.get("jobs") or []), flush=True)
+        if data.get("jobs"):
+            print("UBER_LAST", json.dumps(data["jobs"][-1], ensure_ascii=False)[:4000], flush=True)
 
 
 def atlassian():
     url = "https://www.atlassian.com/endpoint/careers/listings"
     r = requests.get(url, headers=UA, timeout=30)
-    print("ATLAS", r.status_code, r.headers.get("content-type"), flush=True)
     r.raise_for_status()
     data = r.json()
-    print("ATLAS_SHAPE", json.dumps(summarize(data), ensure_ascii=False)[:10000], flush=True)
-    if isinstance(data, list):
-        print("ATLAS_COUNT", len(data), flush=True)
-        for row in data[:3] + data[-3:]:
-            print("ATLAS_ROW", json.dumps(row, ensure_ascii=False)[:6000], flush=True)
+    print("ATLAS_COUNT", len(data), "UNIQUE", len({str(x.get('id')) for x in data if isinstance(x, dict)}), flush=True)
 
 
 def navi():
@@ -59,13 +42,18 @@ def navi():
         "https://navi.com/careers",
         "https://navi.com/careers/jobs",
         "https://navi.freshteam.com/jobs",
-        "https://navi.freshteam.com/jobs?remote=false",
+        "https://lnkd.in/gZCfjnGQ",
+        "https://lnkd.in/ghZniGmy",
+        "https://lnkd.in/gct596Pc",
+        "https://lnkd.in/g4WGb7u3",
     ]
     for url in urls:
         try:
             r = requests.get(url, headers=UA, timeout=30, allow_redirects=True)
-            print("NAVI", url, "->", r.url, r.status_code, r.headers.get("content-type"), flush=True)
-            print("NAVI_BODY", re.sub(r"\s+", " ", r.text[:8000])[:8000], flush=True)
+            print("NAVI", url, "->", r.url, r.status_code, flush=True)
+            print("NAVI_HISTORY", [(h.status_code, h.url, h.headers.get("location")) for h in r.history], flush=True)
+            if "navi.com" not in r.url and "lnkd.in" not in r.url:
+                print("NAVI_EXTERNAL_BODY", re.sub(r"\s+", " ", r.text[:2000]), flush=True)
         except Exception as exc:
             print("NAVI_ERROR", url, type(exc).__name__, str(exc), flush=True)
 
