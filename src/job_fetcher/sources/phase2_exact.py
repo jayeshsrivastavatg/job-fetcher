@@ -89,9 +89,6 @@ class UberJobsApiSource(JobSource):
             payload = self._page(page)
             if int(payload.get("page") or page) != page:
                 raise RuntimeError(f"uber_jobs_api_unexpected_page:{page}")
-            # Fail closed if the board changes shape while being enumerated. A small
-            # total count drift can happen when a vacancy opens/closes mid-run, but
-            # pagination metadata itself must remain internally coherent.
             if int(payload.get("totalPages") or total_pages) not in {total_pages - 1, total_pages, total_pages + 1}:
                 raise RuntimeError("uber_jobs_api_page_count_drift")
             rows.extend(payload.get("jobs") or [])
@@ -104,8 +101,6 @@ class UberJobsApiSource(JobSource):
             if job_id:
                 unique[job_id] = row
 
-        # Refetch page one after exhausting the board. If a large mutation happened
-        # during the walk, never publish a silently partial snapshot.
         end = self._page(1)
         end_total = int(end.get("totalJobs") or 0)
         if abs(end_total - total_jobs) > self.page_size:
@@ -145,8 +140,6 @@ class AtlassianListingsApiSource(JobSource):
             portal_id = _text(portal_post.get("portalId"))
         if not job_id:
             return None
-        # iCIMS numeric IDs are not globally unique across Atlassian's regional
-        # portals, so the portal is part of the stable identity.
         return f"{portal_id or 'unknown'}:{job_id}"
 
     @staticmethod
@@ -180,13 +173,29 @@ class AtlassianListingsApiSource(JobSource):
         if len(start_keys) != len(rows):
             raise RuntimeError(f"atlassian_listing_missing_or_duplicate_identity:{len(start_keys)}/{len(rows)}")
 
-        # The endpoint is an all-at-once listing. Refetch once so a major mid-run
-        # board mutation is not mistaken for completeness.
         end_rows = self._rows()
         end_keys = {key for row in end_rows if (key := self.record_key(row))}
         if len(end_keys.symmetric_difference(start_keys)) > 2:
             raise RuntimeError("atlassian_listings_board_changed_during_fetch")
 
-        # Favor the later snapshot, which can include newly opened roles.
         by_key = {self.record_key(row): row for row in end_rows}
         return [self._job(company, row) for key, row in by_key.items() if key]
+
+
+class NaviOfficialCareersSource(JobSource):
+    """Fail closed until Navi exposes an approved enumerable vacancy feed.
+
+    Navi's branded careers URLs currently present a managed access challenge to
+    automated clients. The old Freshteam board is reachable but advertises zero
+    jobs, while current hiring links observed publicly resolve to LinkedIn. This
+    project deliberately does not automate LinkedIn or bypass access controls.
+    Returning zero or falling back to generic HTML here would make the dataset look
+    complete when it cannot be proven complete, so the source is explicitly blocked.
+    """
+
+    def fetch(self, company: dict) -> list[Job]:
+        raise RuntimeError(
+            "automation_disallowed_or_unavailable: Navi does not expose an approved "
+            "enumerable first-party vacancy feed; branded careers access is restricted "
+            "and LinkedIn automation is not used. Manual or company-approved feed required."
+        )
