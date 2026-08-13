@@ -10,6 +10,10 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 class CustomHtmlSource(JobSource):
     def fetch(self, company):
         src = company["source"]
+        if src.get("job_path_regex"):
+            from job_fetcher.sources.official_links import OfficialLinksSource
+            return OfficialLinksSource().fetch(company)
+
         url = src.get("list_url") or company["career_url"]
         sel = src["selectors"]
         r = session().get(url, timeout=timeout_seconds(), headers=src.get("headers", {}))
