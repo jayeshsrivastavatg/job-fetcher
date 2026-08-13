@@ -12,13 +12,7 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 
 
 class RadancySource(JobSource):
-    """Public Radancy/TalentBrew careers source.
-
-    TalentBrew tenants expose an anonymous ``/{lang}/search-jobs/results``
-    endpoint. Some tenants return a JSON envelope whose ``results`` member is the
-    server-rendered job-tile fragment, while others return that HTML fragment
-    directly. Both forms carry stable ``data-job-id`` values.
-    """
+    """Public Radancy/TalentBrew careers source."""
 
     def fetch(self, company):
         src = company.get("source") or {}
@@ -43,12 +37,7 @@ class RadancySource(JobSource):
         for page in range(1, max_pages + 1):
             response = client.get(
                 f"{origin}/{lang}/search-jobs/results",
-                params={
-                    "ActiveFacetID": 0,
-                    "CurrentPage": page,
-                    "RecordsPerPage": page_size,
-                    "FacetType": 0,
-                },
+                params={"ActiveFacetID": 0, "CurrentPage": page, "RecordsPerPage": page_size, "FacetType": 0},
                 timeout=timeout_seconds(),
                 headers=headers,
             )
@@ -106,18 +95,22 @@ class RadancySource(JobSource):
             return []
         soup = BeautifulSoup(fragment, "html.parser")
         out = []
-        for anchor in soup.select("a[href][data-job-id]"):
-            job_id = clean_text(anchor.get("data-job-id"))
-            title = clean_text(anchor.get_text(" ", strip=True))
+        for anchor in soup.select("a[href]"):
             absolute = urljoin(origin, anchor.get("href") or "")
             parsed = urlparse(absolute)
-            if not job_id or not title or parsed.scheme != "https" or parsed.netloc.casefold() != expected_host.casefold():
+            if parsed.scheme != "https" or parsed.netloc.casefold() != expected_host.casefold():
                 continue
             parts = [part for part in parsed.path.split("/") if part]
-            if len(parts) < 3 or "job" not in [part.casefold() for part in parts[:3]]:
+            job_index = next((i for i, part in enumerate(parts) if part.casefold() == "job"), None)
+            if job_index is None or len(parts) < job_index + 4:
+                continue
+            path_id = parts[-1] if parts[-1].isdigit() else None
+            job_id = clean_text(anchor.get("data-job-id")) or path_id
+            title = clean_text(anchor.get_text(" ", strip=True))
+            if not job_id or not title:
                 continue
             container = anchor.find_parent("li") or anchor.parent
-            location_node = container.select_one(".job-location") if container else None
+            location_node = container.select_one(".job-location, .job-location-label, .location") if container else None
             location = clean_text(location_node.get_text(" ", strip=True)) if location_node else None
             out.append({"id": job_id, "title": title, "location": location, "url": absolute})
         return out
