@@ -21,6 +21,9 @@ NUTANIX_TOTAL_RE = re.compile(r"Displaying\s+\d+\s+to\s+\d+\s+of\s+(?P<total>\d+
 NUTANIX_JOB_RE = re.compile(r"^/en/jobs/(?P<id>[^/]+)/", re.I)
 SHIPROCKET_JOB_RE = re.compile(r"^/jobs/(?P<id>[^/]+)/?$", re.I)
 SCALER_JOB_RE = re.compile(r"^/careers/(?P<id>[^/]+)/?$", re.I)
+NYKAA_TOTAL_RE = re.compile(r"Showing\s+\d+\s+of\s+(?P<total>\d+)\s*-?\s*Jobs", re.I)
+NYKAA_JOB_RE = re.compile(r"^/(?P<id>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/?$", re.I)
+STATIC_DEBUG_IDS = {"shiprocket", "scaler", "nykaa"}
 
 
 def _get_html(url: str) -> tuple[str, str]:
@@ -43,6 +46,26 @@ def _ids_from_links(html: str, base_url: str, pattern: re.Pattern) -> set[str]:
         if match:
             ids.add(match.group("id").casefold())
     return ids
+
+
+def _link_debug(html: str, base_url: str, pattern: re.Pattern) -> list[dict]:
+    out = []
+    seen = set()
+    for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
+        absolute = urljoin(base_url, anchor.get("href") or "")
+        if not pattern.match(urlparse(absolute).path):
+            continue
+        if absolute in seen:
+            continue
+        seen.add(absolute)
+        out.append({
+            "url": absolute,
+            "text": anchor.get_text(" ", strip=True),
+            "class": anchor.get("class") or [],
+            "parent": getattr(anchor.parent, "name", None),
+            "parent_class": anchor.parent.get("class") if getattr(anchor.parent, "get", None) else [],
+        })
+    return out[:50]
 
 
 def _kula_witness(company: dict) -> dict:
@@ -92,14 +115,38 @@ def _successfactors_witness(company: dict) -> dict:
 def _shiprocket_witness() -> dict:
     html, final_url = _get_html("https://careers.shiprocket.in/")
     ids = _ids_from_links(html, final_url, SHIPROCKET_JOB_RE)
-    return {"provider": "official_html", "status": "verified" if ids else "empty", "expected_count": len(ids), "evidence": "official Shiprocket /jobs/<slug>/ inventory"}
+    return {
+        "provider": "official_html", "status": "verified" if ids else "empty",
+        "expected_count": len(ids), "evidence": "official Shiprocket /jobs/<slug>/ inventory",
+        "links": _link_debug(html, final_url, SHIPROCKET_JOB_RE),
+    }
 
 
 def _scaler_witness() -> dict:
     html, final_url = _get_html("https://www.scaler.com/careers/")
     ids = _ids_from_links(html, final_url, SCALER_JOB_RE)
     ids.discard("careers")
-    return {"provider": "official_html", "status": "verified" if ids else "empty", "expected_count": len(ids), "evidence": "official Scaler /careers/<job-slug> inventory"}
+    return {
+        "provider": "official_html", "status": "verified" if ids else "empty",
+        "expected_count": len(ids), "evidence": "official Scaler /careers/<job-slug> inventory",
+        "links": _link_debug(html, final_url, SCALER_JOB_RE),
+    }
+
+
+def _nykaa_witness() -> dict:
+    html, final_url = _get_html("https://careers.nykaa.com/")
+    text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+    total_match = NYKAA_TOTAL_RE.search(text)
+    ids = _ids_from_links(html, final_url, NYKAA_JOB_RE)
+    total = int(total_match.group("total")) if total_match else None
+    return {
+        "provider": "official_html",
+        "status": "verified" if isinstance(total, int) else "unavailable",
+        "expected_count": total,
+        "first_page_ids": len(ids),
+        "evidence": "official Nykaa displayed Showing X of N Jobs total",
+        "links": _link_debug(html, final_url, NYKAA_JOB_RE),
+    }
 
 
 def _nutanix_witness() -> dict:
@@ -115,10 +162,8 @@ def _nutanix_witness() -> dict:
         page_html, page_url = _get_html(f"{base}?page={page}")
         ids.update(_ids_from_links(page_html, page_url, NUTANIX_JOB_RE))
     return {
-        "provider": "official_html",
-        "status": "verified" if len(ids) == total else "witness_partial",
-        "expected_count": total,
-        "enumerated_count": len(ids),
+        "provider": "official_html", "status": "verified" if len(ids) == total else "witness_partial",
+        "expected_count": total, "enumerated_count": len(ids),
         "evidence": "official Nutanix displayed total plus numbered server-rendered pages",
     }
 
@@ -129,6 +174,8 @@ def _extra_witness(company: dict, row: dict) -> dict | None:
         return _shiprocket_witness()
     if company_id == "scaler":
         return _scaler_witness()
+    if company_id == "nykaa":
+        return _nykaa_witness()
     if company_id == "nutanix":
         return _nutanix_witness()
 
@@ -174,7 +221,7 @@ def main() -> int:
         witness = None
         witness_error = f"{type(exc).__name__}: {exc}"
 
-    print(json.dumps({
+    payload = {
         "id": row.get("id"), "name": row.get("name"), "verdict": row.get("verdict"),
         "adapter": row.get("adapter"), "jobs_found": row.get("jobs_found"),
         "expected_count": row.get("expected_count"), "completeness_pct": row.get("completeness_pct"),
@@ -184,8 +231,13 @@ def main() -> int:
         "source_types": row.get("source_types"), "count_probe": row.get("count_probe"),
         "breadth_witness": witness, "breadth_witness_error": witness_error,
         "failure_category": row.get("failure_category"), "error": row.get("error"),
-    }, indent=2, ensure_ascii=False))
-
+    }
+    if args.company in STATIC_DEBUG_IDS:
+        payload["production_jobs"] = [
+            {"id": job.get("external_id"), "title": job.get("title"), "location": job.get("location"), "url": job.get("job_url")}
+            for job in (row.get("jobs") or [])
+        ]
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
     return 0 if row.get("verdict") == "CERTIFIED" or _exact_from_extra_witness(row, witness) else 1
 
 
