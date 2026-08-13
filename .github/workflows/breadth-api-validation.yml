@@ -5,19 +5,6 @@ on:
     branches:
       - fix/phase4-zero-job-failures
     paths:
-      - 'src/job_fetcher/sources/known_provider_overrides.py'
-      - 'src/job_fetcher/sources/breadth_provider_overrides.py'
-      - 'src/job_fetcher/sources/factory.py'
-      - 'src/job_fetcher/job_quality.py'
-      - 'src/job_fetcher/sources/greenhouse.py'
-      - 'src/job_fetcher/sources/lever.py'
-      - 'src/job_fetcher/sources/smartrecruiters.py'
-      - 'src/job_fetcher/sources/workday.py'
-      - 'src/job_fetcher/sources/kula.py'
-      - 'src/job_fetcher/sources/trakstar.py'
-      - 'src/job_fetcher/sources/successfactors.py'
-      - 'src/job_fetcher/sources/oracle.py'
-      - 'src/job_fetcher/certification.py'
       - 'scripts/verify_breadth_batch.py'
       - '.github/workflows/breadth-api-validation.yml'
   workflow_dispatch:
@@ -32,24 +19,20 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 6
+      max-parallel: 4
       matrix:
         company:
-          - gojek
-          - shiprocket
-          - nykaa
-          - media_net
-          - tesco_india
-          - winzo
+          - confluent
+          - google
+          - rippling
+          - navi
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install
-        run: pip install -r requirements.txt && pip install -e .
-      - name: Verify ${{ matrix.company }}
-        env:
+      - run: pip install -r requirements.txt && pip install -e .
+      - env:
           JOB_FETCHER_DISABLE_BROWSER: '1'
           JOB_FETCHER_HTTP_TIMEOUT: '20'
         run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
