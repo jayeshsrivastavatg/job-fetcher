@@ -22,5 +22,7 @@ after = snapshot()
 stable = before & after
 missing = stable - production
 print({"official_before": len(before), "official_after": len(after), "stable": len(stable), "production": len(jobs), "missing": len(missing)})
+if not before or not after or not stable:
+    raise SystemExit("Goldman independent official witness is empty; refusing false exact certification")
 if missing or len(production) != len(jobs):
     raise SystemExit(1)
