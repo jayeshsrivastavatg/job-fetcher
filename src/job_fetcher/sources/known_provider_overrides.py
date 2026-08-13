@@ -30,8 +30,8 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     },
     # Lowe's India is a client-rendered Phenom tenant. The live official page
     # exposes numbered pagination and stable JR-* /in/en/job/... vacancy URLs.
-    # Route it to the provider-aware browser adapter instead of StrictAuto, which
-    # previously detected Phenom but intentionally failed closed without fetching.
+    # Each detail page publishes a standard JobPosting JSON-LD with the full JD and
+    # India location, so hydrate those first-party pages after enumeration.
     "lowes_india": {
         "type": "phenom",
         "entry_url": "https://talent.lowes.com/in/en/search-results",
@@ -39,6 +39,8 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "browser_max_pages": 20,
         "browser_max_scrolls": 10,
         "browser_load_more_clicks": 10,
+        "hydrate_details": True,
+        "detail_workers": 8,
         "locale": "en-IN",
     },
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
