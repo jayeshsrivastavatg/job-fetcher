@@ -28,6 +28,7 @@ def _company(company_id):
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
         ("elastic", GreenhouseSource, {"type": "greenhouse", "board_token": "elastic"}),
         ("druva", GreenhouseSource, {"type": "greenhouse", "board_token": "druva"}),
+        ("thoughtworks", GreenhouseSource, {"type": "greenhouse", "board_token": "thoughtworks"}),
         ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
         (
             "swiggy",
@@ -63,6 +64,8 @@ def _company(company_id):
         ("zomato_blinkit", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Zomato1"}),
         ("dynatrace", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Dynatrace1"}),
         ("mindtickle", LeverSource, {"type": "lever", "site": "mindtickle"}),
+        ("meesho", LeverSource, {"type": "lever", "site": "meesho"}),
+        ("zeta", LeverSource, {"type": "lever", "site": "zeta"}),
         (
             "slice",
             KulaSource,
