@@ -2,10 +2,10 @@ name: Breadth API Validation
 
 on:
   push:
-    branches:
-      - fix/phase4-zero-job-failures
+    branches: [fix/phase4-zero-job-failures]
     paths:
       - 'scripts/verify_breadth_batch.py'
+      - 'scripts/verify_cohesity_public.py'
       - '.github/workflows/breadth-api-validation.yml'
   workflow_dispatch:
 
@@ -16,26 +16,18 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 6
       matrix:
         company:
-          - stripe
-          - databricks
-          - phonepe
-          - salesforce
-          - cred
-          - walmart_global_tech
-          - oracle_oci
-          - adobe
-          - paypal
-          - servicenow
-          - mongodb
-          - rubrik
-          - cohesity
-          - groww
+          - porter
+          - delhivery
+          - gupshup
+          - publicis_sapient_engine
+          - publicis_sapient_digital
+          - games24x7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,3 +38,14 @@ jobs:
           JOB_FETCHER_DISABLE_BROWSER: '1'
           JOB_FETCHER_HTTP_TIMEOUT: '20'
         run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
+
+  cohesity-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: python scripts/verify_cohesity_public.py
