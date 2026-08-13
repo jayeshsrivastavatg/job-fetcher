@@ -122,6 +122,9 @@ def build_source(company):
     # visible rather than replaced by plausible-looking navigation links.
     from job_fetcher.sources.known_provider_overrides import known_provider_config
     effective_source = known_provider_config(company_id)
+    if not effective_source:
+        from job_fetcher.sources.breadth_provider_overrides import breadth_provider_config
+        effective_source = breadth_provider_config(company_id)
     if effective_source:
         company["source"] = effective_source
         return build_raw_source(company)
