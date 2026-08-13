@@ -15,6 +15,7 @@ on:
       - 'src/job_fetcher/sources/kula.py'
       - 'src/job_fetcher/sources/trakstar.py'
       - 'src/job_fetcher/sources/successfactors.py'
+      - 'src/job_fetcher/sources/oracle.py'
       - 'src/job_fetcher/certification.py'
       - 'scripts/verify_breadth_batch.py'
       - '.github/workflows/breadth-api-validation.yml'
@@ -30,10 +31,11 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 7
+      max-parallel: 8
       matrix:
         company:
           - intuit
+          - american_express
           - slice
           - cashfree
           - clevertap
