@@ -3,6 +3,7 @@ import pytest
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
 from job_fetcher.sources.lever import LeverSource
+from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
 from job_fetcher.sources.workday import WorkdaySource
 import job_fetcher.sources.workday as workday_module
@@ -24,6 +25,19 @@ def _company(company_id):
         ("inmobi", GreenhouseSource, {"type": "greenhouse", "board_token": "inmobi"}),
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
         ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
+        (
+            "lowes_india",
+            PhenomSource,
+            {
+                "type": "phenom",
+                "entry_url": "https://talent.lowes.com/in/en/search-results",
+                "canonical_base_url": "https://talent.lowes.com",
+                "browser_max_pages": 20,
+                "browser_max_scrolls": 10,
+                "browser_load_more_clicks": 10,
+                "locale": "en-IN",
+            },
+        ),
         ("freshworks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Freshworks"}),
         ("arista_networks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "AristaNetworks"}),
         ("nagarro", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Nagarro1"}),
