@@ -104,6 +104,14 @@ def build_source(company):
         from job_fetcher.sources.servicenow import ServiceNowSource
         return ServiceNowSource()
 
+    # Zoho Recruit custom career domains use the distinctive public /jobs/Careers
+    # route and embed the complete openings array in that server-rendered page.
+    source = company.get("source") or {}
+    entry = str(source.get("entry_url") or company.get("career_url") or "").rstrip("/")
+    if source.get("type") == "auto" and entry.endswith("/jobs/Careers"):
+        company["source"] = {"type": "zohorecruit", "entry_url": entry}
+        return ZohoRecruitSource()
+
     # A few employers have moved to a cleaner public provider/API than the source
     # originally discovered for their branded career page.
     if company_id in {"amazon", "snowflake", "confluent"}:
