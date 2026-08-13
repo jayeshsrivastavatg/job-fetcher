@@ -45,7 +45,7 @@ class OfficialLinksSource(JobSource):
             if not title:
                 h1 = soup.select_one(src.get("detail_title_selector", "h1"))
                 title = h1.get_text(" ", strip=True) if h1 else None
-            title = title or self._text(listing.get("title"))
+            title = title or self._listing_title(listing.get("title"))
             jobs.append(Job(
                 company["id"], company["name"], "official_links",
                 external_id or str(listing["id"]), title or "", location,
@@ -85,6 +85,21 @@ class OfficialLinksSource(JobSource):
     def _text(value):
         text = str(value).strip() if value is not None else ""
         return text or None
+
+    @classmethod
+    def _listing_title(cls, value):
+        text = cls._text(value)
+        if not text:
+            return None
+        # Some first-party cards concatenate age + title + team + location + type.
+        # Strip only the leading age marker; keep the rest verbatim rather than
+        # guessing at company-specific title/team boundaries.
+        return re.sub(
+            r"^Posted\s+(?:over\s+|about\s+)?(?:\d+|a|an)\s+(?:day|days|week|weeks|month|months|year|years)\s+ago\s+",
+            "",
+            text,
+            flags=re.I,
+        ).strip() or text
 
     @classmethod
     def _identifier(cls, posting):
