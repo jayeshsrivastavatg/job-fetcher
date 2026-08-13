@@ -14,11 +14,10 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 class RadancySource(JobSource):
     """Public Radancy/TalentBrew careers source.
 
-    TalentBrew tenants expose an anonymous JSON endpoint at
-    ``/{lang}/search-jobs/results``. Its ``results`` member is a server-rendered
-    HTML fragment containing the current job tiles and stable ``data-job-id``
-    values. Pagination is drained until a short/empty page; India detail pages are
-    hydrated from the same first-party host when requested.
+    TalentBrew tenants expose an anonymous ``/{lang}/search-jobs/results``
+    endpoint. Some tenants return a JSON envelope whose ``results`` member is the
+    server-rendered job-tile fragment, while others return that HTML fragment
+    directly. Both forms carry stable ``data-job-id`` values.
     """
 
     def fetch(self, company):
@@ -54,13 +53,11 @@ class RadancySource(JobSource):
                 headers=headers,
             )
             response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, dict):
-                raise RuntimeError("radancy results endpoint returned a non-object response")
-            if payload.get("hasJobs") is False:
+            fragment, has_jobs = self._result_fragment(response)
+            if has_jobs is False:
                 exhausted = True
                 break
-            tiles = self._parse_tiles(payload.get("results"), origin, parsed.netloc)
+            tiles = self._parse_tiles(fragment, origin, parsed.netloc)
             if not tiles:
                 exhausted = True
                 break
@@ -90,6 +87,18 @@ class RadancySource(JobSource):
                 with ThreadPoolExecutor(max_workers=workers) as pool:
                     list(pool.map(lambda job: self._hydrate_detail(company, job), india))
         return jobs
+
+    @staticmethod
+    def _result_fragment(response):
+        try:
+            payload = response.json()
+        except Exception:
+            return response.text, None
+        if isinstance(payload, dict):
+            return payload.get("results") or "", payload.get("hasJobs")
+        if isinstance(payload, str):
+            return payload, None
+        return response.text, None
 
     @staticmethod
     def _parse_tiles(fragment, origin, expected_host):
