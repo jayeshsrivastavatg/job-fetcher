@@ -6,6 +6,16 @@ from copy import deepcopy
 BREADTH_PROVIDER_CONFIGS: dict[str, dict] = {
     "intuit": {"type": "smartrecruiters", "company_identifier": "intuit2"},
     "gojek": {"type": "lever", "site": "GoToGroup"},
+    "scaler": {
+        "type": "custom_html",
+        "list_url": "https://www.scaler.com/careers/",
+        "job_path_regex": r"^/careers/(?P<id>[^/]+)/?$",
+    },
+    "shiprocket": {
+        "type": "custom_html",
+        "list_url": "https://careers.shiprocket.in/",
+        "job_path_regex": r"^/jobs/(?P<id>[^/]+)/?$",
+    },
     "citi": {
         "type": "workday",
         "host": "citi.wd5.myworkdayjobs.com",
