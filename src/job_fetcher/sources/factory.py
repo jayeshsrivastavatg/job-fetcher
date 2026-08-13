@@ -20,6 +20,7 @@ from job_fetcher.sources.atlassian import AtlassianSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
+from job_fetcher.sources.mynexthire import MyNextHireSource
 
 SOURCES = {
     "auto": StrictAutoSource,
@@ -44,6 +45,7 @@ SOURCES = {
     "phenom": PhenomSource,
     "goldman": GoldmanSource,
     "trakstar": TrakstarSource,
+    "mynexthire": MyNextHireSource,
 }
 
 
