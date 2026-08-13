@@ -115,6 +115,17 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "tenant": "fmr", "site": "FidelityCareers", "locale": "en-US",
         "max_jobs": 10000,
     },
+    "siemens_healthineers": {
+        "type": "workday", "host": "onehealthineers.wd3.myworkdayjobs.com",
+        "tenant": "onehealthineers", "site": "SHSJB", "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "dell": {
+        "type": "oracle",
+        "entry_url": "https://iawmqy.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/careers",
+        "max_jobs": 5000,
+        "page_size": 100,
+    },
 }
 
 
