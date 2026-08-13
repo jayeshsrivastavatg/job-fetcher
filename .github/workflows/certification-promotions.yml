@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        company: [slice, cashfree, clevertap, payu, dream11, chargebee, shiprocket]
+        company: [slice, cashfree, clevertap, payu, dream11, chargebee, shiprocket, scaler]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
