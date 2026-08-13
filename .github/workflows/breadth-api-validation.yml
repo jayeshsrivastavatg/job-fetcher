@@ -16,16 +16,26 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 10
       matrix:
         company:
-          - pine_labs
-          - yellow_ai
-          - epam
-          - american_express
+          - stripe
+          - databricks
+          - phonepe
+          - salesforce
+          - cred
+          - walmart_global_tech
+          - oracle_oci
+          - adobe
+          - paypal
+          - servicenow
+          - mongodb
+          - rubrik
+          - cohesity
+          - groww
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
