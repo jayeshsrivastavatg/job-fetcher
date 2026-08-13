@@ -29,7 +29,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       max-parallel: 6
@@ -37,10 +37,10 @@ jobs:
         company:
           - gojek
           - shiprocket
-          - scaler
-          - nutanix
-          - jpmorgan_chase
-          - akamai
+          - nykaa
+          - media_net
+          - tesco_india
+          - winzo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
