@@ -37,5 +37,10 @@ BREADTH_PROVIDER_CONFIGS: dict[str, dict] = {
 
 def breadth_provider_config(company_or_id) -> dict | None:
     company_id = company_or_id if isinstance(company_or_id, str) else str((company_or_id or {}).get("id") or "")
+    # Uber already has a stronger Phase-2 first-party source and Dell's discovered
+    # Oracle host does not expose the anonymous structured collection. Keep both
+    # discoveries as evidence only; do not let them replace production routing.
+    if company_id in {"uber", "dell"}:
+        return None
     config = BREADTH_PROVIDER_CONFIGS.get(company_id)
     return deepcopy(config) if config else None
