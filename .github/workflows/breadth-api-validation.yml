@@ -6,6 +6,8 @@ on:
       - fix/phase4-zero-job-failures
     paths:
       - 'src/job_fetcher/sources/known_provider_overrides.py'
+      - 'src/job_fetcher/sources/breadth_provider_overrides.py'
+      - 'src/job_fetcher/sources/factory.py'
       - 'src/job_fetcher/sources/greenhouse.py'
       - 'src/job_fetcher/sources/lever.py'
       - 'src/job_fetcher/sources/smartrecruiters.py'
@@ -28,7 +30,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 18
+      max-parallel: 19
       matrix:
         company:
           - elastic
@@ -36,6 +38,7 @@ jobs:
           - thoughtworks
           - zomato_blinkit
           - dynatrace
+          - intuit
           - meesho
           - zeta
           - slice
