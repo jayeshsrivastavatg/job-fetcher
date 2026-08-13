@@ -12,11 +12,23 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "razorpay": {"type": "greenhouse", "board_token": "razorpaysoftwareprivatelimited"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
     "hackerrank": {"type": "greenhouse", "board_token": "hackerrank"},
-    # Qualtrics' employer-branded Phenom pages ultimately expose the same current
-    # vacancy IDs on its public Greenhouse board (including gh_jid links). Use the
-    # enumerable Greenhouse inventory directly so a frontend rendering failure can
-    # never turn a live Qualtrics board into a false zero-job result.
+    # Qualtrics' employer-branded pages expose the same current vacancy IDs on its
+    # public Greenhouse board. Use the enumerable board directly so a frontend
+    # rendering failure cannot turn a live Qualtrics board into a false zero.
     "qualtrics": {"type": "greenhouse", "board_token": "qualtrics"},
+    # Lowe's India is a client-rendered Phenom tenant. The live official page
+    # exposes numbered pagination and stable JR-* /in/en/job/... vacancy URLs.
+    # Route it to the provider-aware browser adapter instead of StrictAuto, which
+    # previously detected Phenom but intentionally failed closed without fetching.
+    "lowes_india": {
+        "type": "phenom",
+        "entry_url": "https://talent.lowes.com/in/en/search-results",
+        "canonical_base_url": "https://talent.lowes.com",
+        "browser_max_pages": 20,
+        "browser_max_scrolls": 10,
+        "browser_load_more_clicks": 10,
+        "locale": "en-IN",
+    },
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
     "arista_networks": {"type": "smartrecruiters", "company_identifier": "AristaNetworks"},
     "nagarro": {"type": "smartrecruiters", "company_identifier": "Nagarro1"},
