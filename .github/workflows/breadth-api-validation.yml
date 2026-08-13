@@ -30,25 +30,13 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 19
+      max-parallel: 7
       matrix:
         company:
-          - elastic
-          - druva
-          - thoughtworks
-          - zomato_blinkit
-          - dynatrace
           - intuit
-          - meesho
-          - zeta
           - slice
           - cashfree
           - clevertap
-          - home_depot_tech
-          - wells_fargo
-          - mastercard
-          - fidelity
-          - siemens_healthineers
           - payu
           - dream11
           - chargebee
