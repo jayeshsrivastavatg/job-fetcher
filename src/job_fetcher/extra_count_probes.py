@@ -11,15 +11,11 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 _KULA_JOB_RE = re.compile(r"^/(?P<tenant>[^/]+)/(?:jobs/)?(?P<id>\d+)(?:/(?:apply)?)?/?$", re.I)
 _TRAKSTAR_JOB_RE = re.compile(r"/jobs/(?P<id>[a-z0-9_-]+)(?:[/?#]|$)", re.I)
 _SUCCESSFACTORS_TOTAL_RE = re.compile(r"Results\s+\d+\s*[–—-]\s*\d+\s+of\s+(?P<total>\d+)", re.I)
+_SEARCH_BOARD_TOTAL_RE = re.compile(r"\b(?P<total>\d[\d,]*)\s+(?:jobs|open positions)\b", re.I)
 
 
 def _html(url: str) -> tuple[str, str]:
-    response = session().get(
-        url,
-        timeout=timeout_seconds(),
-        allow_redirects=True,
-        headers={"User-Agent": "PersonalJobFetcher/0.1"},
-    )
+    response = session().get(url, timeout=timeout_seconds(), allow_redirects=True, headers={"User-Agent": "PersonalJobFetcher/0.1"})
     response.raise_for_status()
     return response.text, response.url
 
@@ -82,14 +78,21 @@ def extra_provider_count(company: dict):
         ids = {
             str(row.get("id")).strip()
             for row in rows
-            if isinstance(row, dict)
-            and row.get("id") is not None
-            and row.get("Is_Locked") is not True
-            and row.get("Publish") is not False
+            if isinstance(row, dict) and row.get("id") is not None
+            and row.get("Is_Locked") is not True and row.get("Publish") is not False
         }
         ids.discard("")
         if ids:
             return "zohorecruit", len(ids), "Zoho Recruit first-party embedded openings array"
+        return None
+
+    entry = str(source.get("entry_url") or company.get("career_url") or "").strip()
+    if source_type == "auto" and urlparse(entry).path.rstrip("/").casefold().endswith("/search-jobs"):
+        body, _ = _html(entry)
+        text = BeautifulSoup(body, "html.parser").get_text(" ", strip=True)
+        totals = [int(match.group("total").replace(",", "")) for match in _SEARCH_BOARD_TOTAL_RE.finditer(text)]
+        if totals:
+            return "search_board", max(totals), "first-party search page reported current vacancy total"
         return None
 
     if source_type == "custom_html" and source.get("job_path_regex"):
