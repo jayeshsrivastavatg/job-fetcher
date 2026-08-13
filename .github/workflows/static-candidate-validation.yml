@@ -3,6 +3,9 @@ on:
   push:
     branches: [fix/phase4-zero-job-failures]
     paths:
+      - 'src/job_fetcher/sources/radancy.py'
+      - 'src/job_fetcher/sources/strict_auto.py'
+      - 'scripts/verify_search_board_exact.py'
       - '.github/workflows/static-candidate-validation.yml'
   workflow_dispatch:
 jobs:
@@ -15,5 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt && pip install -e .
-      - run: python -m playwright install --with-deps chromium
-      - run: python scripts/verify_breadth_batch.py --company epam
+      - env:
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+        run: python scripts/verify_search_board_exact.py
