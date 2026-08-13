@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 10
+      max-parallel: 15
       matrix:
         company:
           - elastic
@@ -33,8 +33,13 @@ jobs:
           - meesho
           - zeta
           - slice
+          - cashfree
+          - clevertap
           - target_india
           - home_depot_tech
+          - wells_fargo
+          - mastercard
+          - fidelity
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
