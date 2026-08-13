@@ -1,0 +1,20 @@
+name: Hosted Board Validation
+on:
+  push:
+    branches: [fix/phase4-zero-job-failures]
+    paths:
+      - 'scripts/verify_hosted_board_india.py'
+      - '.github/workflows/hosted-board-validation.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/verify_hosted_board_india.py
