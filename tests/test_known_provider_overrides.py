@@ -49,6 +49,8 @@ def _company(company_id):
                 "browser_max_pages": 20,
                 "browser_max_scrolls": 10,
                 "browser_load_more_clicks": 10,
+                "hydrate_details": True,
+                "detail_workers": 8,
                 "locale": "en-IN",
             },
         ),
