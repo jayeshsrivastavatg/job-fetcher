@@ -1,0 +1,45 @@
+name: Phase 4 Provider Contract Discovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - scripts/phase4_contract_discovery.py
+      - .github/workflows/phase4-contract-discovery.yml
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - rakuten_india
+          - sony_tech_india
+          - makemytrip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install diagnostics dependencies
+        run: python -m pip install requests beautifulsoup4
+      - name: Discover first-party provider contract
+        run: >-
+          python scripts/phase4_contract_discovery.py
+          --target ${{ matrix.target }}
+          --output reports/phase4/${{ matrix.target }}-contract.json
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-${{ matrix.target }}-contract
+          path: reports/phase4/${{ matrix.target }}-contract.json
+          if-no-files-found: warn
+          retention-days: 7
