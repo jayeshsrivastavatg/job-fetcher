@@ -48,6 +48,9 @@ DEFAULT_COMPANIES = [
     "barclays",
     "hpe",
     "sprinklr",
+    "uber",
+    "citi",
+    "dell",
 ]
 
 KULA_JOB_RE = re.compile(r"^/(?P<tenant>[^/]+)/(?:jobs/)?(?P<id>\d+)(?:/(?:apply)?)?/?$", re.I)
