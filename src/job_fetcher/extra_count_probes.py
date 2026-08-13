@@ -72,6 +72,26 @@ def extra_provider_count(company: dict):
             return "successfactors", int(match.group("total")), "SuccessFactors public Results X-Y of N total"
         return None
 
+    if source_type == "zohorecruit":
+        from job_fetcher.sources.zohorecruit import ZohoRecruitSource
+        entry = str(source.get("entry_url") or company.get("career_url") or "").strip()
+        if not entry:
+            return None
+        body, _ = _html(entry)
+        rows = ZohoRecruitSource.parse_openings(body)
+        ids = {
+            str(row.get("id")).strip()
+            for row in rows
+            if isinstance(row, dict)
+            and row.get("id") is not None
+            and row.get("Is_Locked") is not True
+            and row.get("Publish") is not False
+        }
+        ids.discard("")
+        if ids:
+            return "zohorecruit", len(ids), "Zoho Recruit first-party embedded openings array"
+        return None
+
     if source_type == "custom_html" and source.get("job_path_regex"):
         entry = str(source.get("list_url") or company.get("career_url") or "").strip()
         body, final_url = _html(entry)
