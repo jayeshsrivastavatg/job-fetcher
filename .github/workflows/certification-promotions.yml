@@ -2,7 +2,12 @@ name: Certification Promotions
 on:
   push:
     branches: [fix/phase4-zero-job-failures]
-    paths: ['.github/workflows/certification-promotions.yml']
+    paths:
+      - 'src/job_fetcher/sources/official_links.py'
+      - 'src/job_fetcher/sources/custom_html.py'
+      - 'src/job_fetcher/extra_count_probes.py'
+      - 'src/job_fetcher/certification.py'
+      - '.github/workflows/certification-promotions.yml'
 jobs:
   verify:
     runs-on: ubuntu-latest
