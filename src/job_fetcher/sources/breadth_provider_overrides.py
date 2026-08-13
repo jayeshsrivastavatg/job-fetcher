@@ -8,12 +8,6 @@ from copy import deepcopy
 # mappings can be added without repeatedly rewriting the larger compatibility map.
 BREADTH_PROVIDER_CONFIGS: dict[str, dict] = {
     "intuit": {"type": "smartrecruiters", "company_identifier": "intuit2"},
-    "american_express": {
-        "type": "oracle",
-        "mode": "public_search",
-        "entry_url": "https://careers.americanexpress.com/en/sites/CX_1/jobs",
-        "max_pages": 50,
-    },
 }
 
 
