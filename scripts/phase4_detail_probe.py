@@ -11,7 +11,10 @@ from playwright.sync_api import sync_playwright
 
 INTERESTING = re.compile(r"(?:job|req|requisition|detail|career|phenom|mynexthire|api)", re.I)
 LOWES_SEARCH = "https://talent.lowes.com/in/en/search-results"
-SWIGGY_DETAIL = "https://swiggy.mynexthire.com/employer/jobs/careers?reqId=24364"
+# The current employer-facing SPA owns the public job route. Its URL fragment is
+# interpreted client-side and then the app talks to MyNextHire. Hitting the provider
+# list page directly does not select a requisition, so trace the exact official route.
+SWIGGY_DETAIL = "https://careers.swiggy.com/#/careers?reqid=24364"
 
 
 def _clip(value, limit=20000):
@@ -95,7 +98,7 @@ def run(target: str):
         )
         page = context.new_page()
         if target == "swiggy":
-            report["detail"] = _capture_page(page, SWIGGY_DETAIL, 6000)
+            report["detail"] = _capture_page(page, SWIGGY_DETAIL, 9000)
         elif target == "lowes_india":
             page.goto(LOWES_SEARCH, wait_until="domcontentloaded", timeout=90000)
             page.wait_for_timeout(3500)
