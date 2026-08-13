@@ -26,6 +26,10 @@ _AUTHORITATIVE_JOB_FEEDS = {
     "amazon_json",
     "cohesity_json",
     "eightfold_pcsx",
+    # KulaSource only emits tenant-matching canonical /<tenant>/<numeric-id>
+    # vacancy links from the provider's public board. Titles such as "Operations"
+    # or "Finance" are therefore real requisitions, not careers-navigation labels.
+    "kula",
 }
 
 # These are common careers-site navigation/category labels that the old generic
