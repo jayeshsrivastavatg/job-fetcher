@@ -8,6 +8,30 @@ from copy import deepcopy
 # mappings can be added without repeatedly rewriting the larger compatibility map.
 BREADTH_PROVIDER_CONFIGS: dict[str, dict] = {
     "intuit": {"type": "smartrecruiters", "company_identifier": "intuit2"},
+    "uber": {
+        "type": "oracle",
+        "entry_url": "https://iaziqy.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/UberCareers/jobs",
+        "host": "iaziqy.fa.ocs.oraclecloud.com",
+        "site_number": "UberCareers",
+        "locale": "en",
+        "max_pages": 100,
+    },
+    "citi": {
+        "type": "workday",
+        "host": "citi.wd5.myworkdayjobs.com",
+        "tenant": "citi",
+        "site": "2",
+        "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "dell": {
+        "type": "oracle",
+        "entry_url": "https://enterpriseplatform.dell.com/hcmUI/CandidateExperience/en/sites/careers/jobs?mode=location",
+        "host": "enterpriseplatform.dell.com",
+        "site_number": "careers",
+        "locale": "en",
+        "max_pages": 100,
+    },
 }
 
 
