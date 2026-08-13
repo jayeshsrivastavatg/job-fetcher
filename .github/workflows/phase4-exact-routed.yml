@@ -7,6 +7,8 @@ on:
       - fix/phase4-zero-job-failures
     paths:
       - src/job_fetcher/sources/phenom.py
+      - src/job_fetcher/sources/mynexthire.py
+      - src/job_fetcher/sources/factory.py
       - src/job_fetcher/sources/known_provider_overrides.py
       - src/job_fetcher/job_quality.py
       - scripts/verify_phase4_zero_job_production.py
@@ -24,6 +26,7 @@ jobs:
       matrix:
         company:
           - qualtrics
+          - swiggy
           - lowes_india
     steps:
       - uses: actions/checkout@v4
