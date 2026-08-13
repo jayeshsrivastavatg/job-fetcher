@@ -5,6 +5,8 @@ on:
     branches: [fix/phase4-zero-job-failures]
     paths:
       - 'scripts/verify_dedicated_public_exact.py'
+      - 'scripts/verify_all_workday.py'
+      - 'src/job_fetcher/sources/workday.py'
       - '.github/workflows/breadth-api-validation.yml'
   workflow_dispatch:
 
@@ -26,3 +28,17 @@ jobs:
           JOB_FETCHER_DISABLE_BROWSER: '1'
           JOB_FETCHER_HTTP_TIMEOUT: '20'
         run: python scripts/verify_dedicated_public_exact.py
+
+  workday-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - env:
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+        run: python scripts/verify_all_workday.py
