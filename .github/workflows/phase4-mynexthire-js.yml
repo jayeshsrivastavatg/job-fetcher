@@ -1,0 +1,34 @@
+name: Phase 4 MyNextHire JD Contract
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - scripts/probe_mynexthire_js_contract.py
+      - .github/workflows/phase4-mynexthire-js.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install requests
+      - name: Inspect MyNextHire public careers JavaScript
+        run: python scripts/probe_mynexthire_js_contract.py
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-mynexthire-js-contract
+          path: reports/phase4/mynexthire-js-contract.json
+          if-no-files-found: warn
+          retention-days: 7
