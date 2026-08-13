@@ -17,9 +17,15 @@ DEFAULT_COMPANIES = [
     "meesho",
     "zeta",
     "slice",
+    "cashfree",
+    "clevertap",
     "target_india",
     "home_depot_tech",
+    "wells_fargo",
+    "mastercard",
+    "fidelity",
 ]
+KULA_COMPANIES = {"slice", "cashfree", "clevertap"}
 
 
 def main() -> int:
@@ -32,7 +38,7 @@ def main() -> int:
 
     # The provider's own count endpoint is the primary completeness witness for
     # Greenhouse/Lever/SmartRecruiters/Workday. Skip separate HTML detail samples
-    # here so ten companies can be checked cheaply in parallel.
+    # here so the batch can be checked cheaply in parallel.
     row = audit_company(company, sample_size=0, detail_timeout=5.0)
     print(json.dumps({
         "id": row.get("id"),
@@ -53,10 +59,10 @@ def main() -> int:
         "error": row.get("error"),
     }, indent=2, ensure_ascii=False))
 
-    # Structured routes should certify exactly. Kula is intentionally accepted as
-    # UNVERIFIED for now because the general certification layer does not yet have
-    # a separate exhaustive count probe for Kula; it must still return usable jobs.
-    if args.company == "slice":
+    # Kula has a direct public board adapter but the general certification layer
+    # does not yet expose an independent count probe. For this breadth gate require
+    # non-empty usable output; every provider with a count API must certify exactly.
+    if args.company in KULA_COMPANIES:
         ok = row.get("verdict") in {"CERTIFIED", "UNVERIFIED"} and int(row.get("jobs_found") or 0) > 0
     else:
         ok = row.get("verdict") == "CERTIFIED"
