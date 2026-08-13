@@ -2,6 +2,7 @@ import pytest
 
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
+from job_fetcher.sources.kula import KulaSource
 from job_fetcher.sources.lever import LeverSource
 from job_fetcher.sources.mynexthire import MyNextHireSource
 from job_fetcher.sources.phenom import PhenomSource
@@ -25,6 +26,8 @@ def _company(company_id):
         ("postman", GreenhouseSource, {"type": "greenhouse", "board_token": "postman"}),
         ("inmobi", GreenhouseSource, {"type": "greenhouse", "board_token": "inmobi"}),
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
+        ("elastic", GreenhouseSource, {"type": "greenhouse", "board_token": "elastic"}),
+        ("druva", GreenhouseSource, {"type": "greenhouse", "board_token": "druva"}),
         ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
         (
             "swiggy",
@@ -57,7 +60,43 @@ def _company(company_id):
         ("freshworks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Freshworks"}),
         ("arista_networks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "AristaNetworks"}),
         ("nagarro", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Nagarro1"}),
+        ("zomato_blinkit", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Zomato1"}),
+        ("dynatrace", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Dynatrace1"}),
         ("mindtickle", LeverSource, {"type": "lever", "site": "mindtickle"}),
+        (
+            "slice",
+            KulaSource,
+            {
+                "type": "kula",
+                "entry_url": "https://careers.kula.ai/slice",
+                "tenant": "slice",
+                "max_jobs": 5000,
+            },
+        ),
+        (
+            "target_india",
+            WorkdaySource,
+            {
+                "type": "workday",
+                "host": "target.wd5.myworkdayjobs.com",
+                "tenant": "target",
+                "site": "targetcareers",
+                "locale": "en-US",
+                "max_jobs": 10000,
+            },
+        ),
+        (
+            "home_depot_tech",
+            WorkdaySource,
+            {
+                "type": "workday",
+                "host": "homedepot.wd5.myworkdayjobs.com",
+                "tenant": "homedepot",
+                "site": "CareerDepot",
+                "locale": "en-US",
+                "max_jobs": 10000,
+            },
+        ),
     ],
 )
 def test_known_branded_pages_are_promoted_to_structured_provider(company_id, expected_cls, expected_source):
