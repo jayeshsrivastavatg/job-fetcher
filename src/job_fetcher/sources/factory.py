@@ -21,6 +21,7 @@ from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.mynexthire import MyNextHireSource
+from job_fetcher.sources.zohorecruit import ZohoRecruitSource
 
 SOURCES = {
     "auto": StrictAutoSource,
@@ -46,6 +47,7 @@ SOURCES = {
     "goldman": GoldmanSource,
     "trakstar": TrakstarSource,
     "mynexthire": MyNextHireSource,
+    "zohorecruit": ZohoRecruitSource,
 }
 
 
