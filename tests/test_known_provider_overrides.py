@@ -3,6 +3,7 @@ import pytest
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
 from job_fetcher.sources.lever import LeverSource
+from job_fetcher.sources.mynexthire import MyNextHireSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
 from job_fetcher.sources.workday import WorkdaySource
@@ -25,6 +26,19 @@ def _company(company_id):
         ("inmobi", GreenhouseSource, {"type": "greenhouse", "board_token": "inmobi"}),
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
         ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
+        (
+            "swiggy",
+            MyNextHireSource,
+            {
+                "type": "mynexthire",
+                "tenant": "swiggy",
+                "base_url": "https://swiggy.mynexthire.com",
+                "source_short_name": "careers",
+                "filter_by_bu_id": -1,
+                "origin": "https://careers.swiggy.com",
+                "referer": "https://careers.swiggy.com/#/careers",
+            },
+        ),
         (
             "lowes_india",
             PhenomSource,
