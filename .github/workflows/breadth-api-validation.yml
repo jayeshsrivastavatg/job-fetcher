@@ -4,8 +4,7 @@ on:
   push:
     branches: [fix/phase4-zero-job-failures]
     paths:
-      - 'scripts/verify_breadth_batch.py'
-      - 'scripts/verify_cohesity_public.py'
+      - 'scripts/verify_dedicated_public_exact.py'
       - '.github/workflows/breadth-api-validation.yml'
   workflow_dispatch:
 
@@ -14,20 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  dedicated-public:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      max-parallel: 6
-      matrix:
-        company:
-          - porter
-          - delhivery
-          - gupshup
-          - publicis_sapient_engine
-          - publicis_sapient_digital
-          - games24x7
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,15 +25,4 @@ jobs:
       - env:
           JOB_FETCHER_DISABLE_BROWSER: '1'
           JOB_FETCHER_HTTP_TIMEOUT: '20'
-        run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
-
-  cohesity-public:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt && pip install -e .
-      - run: python scripts/verify_cohesity_public.py
+        run: python scripts/verify_dedicated_public_exact.py
