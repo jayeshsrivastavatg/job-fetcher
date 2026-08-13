@@ -4,10 +4,10 @@ import concurrent.futures
 import html
 import json
 import re
-from urllib.parse import urlparse
 
 import requests
 
+from job_fetcher.certification import audit_company
 from job_fetcher.config import load_config
 from job_fetcher.sources.breadth_provider_overrides import breadth_provider_config
 from job_fetcher.sources.known_provider_overrides import known_provider_config
@@ -16,6 +16,7 @@ from job_fetcher.sources.known_provider_overrides import known_provider_config
 TIMEOUT = 12
 WORKERS = 16
 UA = "Mozilla/5.0 PersonalJobFetcher/0.1 provider-discovery"
+VALIDATE_IDS = ["uber", "citi", "dell", "hpe"]
 
 PROVIDER_PATTERNS = {
     "greenhouse": [
@@ -34,10 +35,7 @@ PROVIDER_PATTERNS = {
         re.compile(r"https?://[A-Za-z0-9.-]+\.fa\.[A-Za-z0-9.-]*oraclecloud\.com/[^\s\"'<>]+", re.I),
         re.compile(r"https?://[^\s\"'<>]+/hcmUI/CandidateExperience/[^\s\"'<>]+", re.I),
     ],
-    "successfactors": [
-        re.compile(r"https?://[^\s\"'<>]*successfactors\.[^\s\"'<>]+", re.I),
-        re.compile(r"https?://[^\s\"'<>]*/go/[^\s\"'<>]+", re.I),
-    ],
+    "successfactors": [re.compile(r"https?://[^\s\"'<>]*successfactors\.[^\s\"'<>]+", re.I)],
     "eightfold": [re.compile(r"https?://[A-Za-z0-9.-]+\.eightfold\.ai/careers[^\s\"'<>]*", re.I)],
     "mynexthire": [re.compile(r"https?://[A-Za-z0-9.-]+\.mynexthire\.com[^\s\"'<>]*", re.I)],
 }
@@ -54,7 +52,7 @@ def _signals(text: str) -> list[dict]:
     for provider, patterns in PROVIDER_PATTERNS.items():
         for pattern in patterns:
             for match in pattern.findall(normalized):
-                value = str(match).rstrip("),.;]")
+                value = str(match).rstrip("),.;]\\")
                 key = (provider, value)
                 if key in seen:
                     continue
@@ -108,9 +106,37 @@ def _scan(company: dict) -> dict:
     }
 
 
+def _validate(companies_by_id: dict[str, dict]) -> list[dict]:
+    rows = []
+    for company_id in VALIDATE_IDS:
+        company = companies_by_id.get(company_id)
+        if not company:
+            continue
+        try:
+            row = audit_company(company, sample_size=0, detail_timeout=5.0)
+            rows.append({
+                "id": company_id,
+                "verdict": row.get("verdict"),
+                "adapter": row.get("adapter"),
+                "jobs_found": row.get("jobs_found"),
+                "expected_count": row.get("expected_count"),
+                "completeness_pct": row.get("completeness_pct"),
+                "rejected_non_job_records": row.get("rejected_non_job_records"),
+                "valid_url_ratio": row.get("valid_url_ratio"),
+                "stable_id_ratio": row.get("stable_id_ratio"),
+                "failure_category": row.get("failure_category"),
+                "error": row.get("error"),
+            })
+        except Exception as exc:
+            rows.append({"id": company_id, "error": f"{type(exc).__name__}: {exc}"})
+    return rows
+
+
 def main() -> None:
+    all_companies = load_config().get("companies", [])
+    companies_by_id = {str(company.get("id") or ""): company for company in all_companies}
     companies = []
-    for company in load_config().get("companies", []):
+    for company in all_companies:
         if not company.get("enabled", True):
             continue
         if str((company.get("source") or {}).get("type") or "").casefold() != "auto":
@@ -129,6 +155,7 @@ def main() -> None:
         "candidate_count": len(candidates),
         "candidates": candidates,
         "unresolved_ids": [row["id"] for row in unresolved],
+        "provider_validation": _validate(companies_by_id),
     }, indent=2, ensure_ascii=False))
 
 
