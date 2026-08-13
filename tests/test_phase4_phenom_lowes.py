@@ -1,4 +1,5 @@
 from job_fetcher.models import Job
+import job_fetcher.sources.phenom as phenom_module
 from job_fetcher.sources.phenom import PhenomSource
 
 
@@ -74,3 +75,47 @@ def test_structured_phenom_row_with_external_id_survives_nonstandard_apply_url()
 
     assert len(jobs) == 1
     assert jobs[0].external_id == "JR-02597303"
+
+
+class _DetailResponse:
+    url = "https://talent.lowes.com/in/en/job/JR-02597303/software-engineer"
+    text = """<html><head><script type="application/ld+json">
+    {
+      "@type": "JobPosting",
+      "title": "Software Engineer",
+      "identifier": {"@type": "PropertyValue", "value": "JR-02597303"},
+      "url": "https://talent.lowes.com/in/en/job/JR-02597303/software-engineer",
+      "datePosted": "2026-08-12",
+      "jobLocation": {"@type": "Place", "address": {
+        "@type": "PostalAddress", "addressLocality": "Bengaluru",
+        "addressRegion": "Karnataka", "addressCountry": "India"
+      }},
+      "description": "<p>Design and build reliable software systems for Lowe's India. Own production quality, testing, operations, and collaboration across engineering teams.</p>"
+    }
+    </script></head></html>"""
+
+    def raise_for_status(self):
+        return None
+
+
+class _DetailClient:
+    def get(self, *_args, **_kwargs):
+        return _DetailResponse()
+
+
+def test_lowes_detail_jobposting_hydrates_location_and_description(monkeypatch):
+    job = _job(
+        "https://talent.lowes.com/in/en/job/JR-02597303/software-engineer",
+        external_id="JR-02597303",
+    )
+    job.location = None
+    job.description = None
+    monkeypatch.setattr(phenom_module, "session", lambda: _DetailClient())
+
+    hydrated = PhenomSource._hydrate_one(_company(), job)
+
+    assert hydrated.external_id == "JR-02597303"
+    assert hydrated.location == "Bengaluru, Karnataka, India"
+    assert "Design and build reliable software systems" in hydrated.description
+    assert hydrated.posted_at == "2026-08-12"
+    assert hydrated.raw["detail_source"] == "public_jobposting_jsonld"
