@@ -19,6 +19,7 @@ DEFAULT_COMPANIES = [
     "thoughtworks",
     "zomato_blinkit",
     "dynatrace",
+    "intuit",
     "meesho",
     "zeta",
     "slice",
@@ -120,12 +121,13 @@ def _successfactors_witness(company: dict) -> dict:
 
 def _extra_witness(company: dict, row: dict) -> dict | None:
     source_type = str((company.get("source") or {}).get("type") or "").casefold()
+    source_types = {str(x).casefold() for x in row.get("source_types") or []}
     # build_source() may promote an `auto` company in-place while audit_company runs.
-    if source_type == "kula" or "kula" in {str(x).casefold() for x in row.get("source_types") or []}:
+    if source_type == "kula" or "kula" in source_types:
         return _kula_witness(company)
-    if source_type == "trakstar" or "trakstar" in {str(x).casefold() for x in row.get("source_types") or []}:
+    if source_type == "trakstar" or "trakstar" in source_types:
         return _trakstar_witness(company)
-    if source_type == "successfactors" or "successfactors" in {str(x).casefold() for x in row.get("source_types") or []}:
+    if source_type == "successfactors" or "successfactors" in source_types:
         return _successfactors_witness(company)
     return None
 
