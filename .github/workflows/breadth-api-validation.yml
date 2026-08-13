@@ -16,6 +16,7 @@ on:
       - 'src/job_fetcher/sources/kula.py'
       - 'src/job_fetcher/sources/trakstar.py'
       - 'src/job_fetcher/sources/successfactors.py'
+      - 'src/job_fetcher/sources/oracle.py'
       - 'src/job_fetcher/certification.py'
       - 'scripts/verify_breadth_batch.py'
       - '.github/workflows/breadth-api-validation.yml'
@@ -28,27 +29,18 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
-      max-parallel: 12
+      max-parallel: 6
       matrix:
         company:
-          - postman
-          - razorpay
-          - inmobi
-          - hackerrank
-          - freshworks
-          - arista_networks
-          - nagarro
-          - mindtickle
-          - broadcom_vmware
-          - visa
-          - browserstack
-          - cisco
-          - barclays
-          - hpe
-          - sprinklr
+          - gojek
+          - shiprocket
+          - scaler
+          - nutanix
+          - jpmorgan_chase
+          - akamai
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
