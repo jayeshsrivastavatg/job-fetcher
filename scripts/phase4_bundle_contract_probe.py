@@ -12,15 +12,19 @@ import requests
 TARGETS = {
     "rakuten_india": "https://rakuten.openings.co/rakuten/main.92406371525d74a6.js",
     "sony_tech_india": "https://careers.sonyindiasoftware.co.in/sonyindiasoftware/main.3fa7ec1d477903fd.js",
-    "makemytrip": "https://careers.makemytrip.com/prod/bundle.js",
+    # /prod/ is a React route; its HTML explicitly loads the application from the
+    # site-root /bundle.js. Probing /prod/bundle.js only returns the SPA shell.
+    "makemytrip": "https://careers.makemytrip.com/bundle.js",
 }
 
 KEYWORDS = re.compile(
-    r"(?:zwayam|api|job|jobs|career|opening|opportunit|requisition|search|vacan|tenant|client|domain|baseurl|host)",
+    r"(?:zwayam|api|job|jobs|career|opening|opportunit|requisition|search|vacan|tenant|client|domain|baseurl|host|darwinbox)",
     re.I,
 )
 URL_RE = re.compile(r"https?:\\?/\\?/[^\"'`\\\s<>]+", re.I)
-STRING_RE = re.compile(r"(?P<q>[\"'`])(?P<s>(?:\\.|(?!\1).){1,700})(?P=q)", re.S)
+# Deliberately bounded and newline-free. A previous fully escaped JS-string regex
+# could backtrack heavily on minified Angular bundles; diagnostics must stay cheap.
+STRING_RE = re.compile(r"[\"']([^\"'\r\n]{1,700})[\"']")
 SOURCE_MAP_RE = re.compile(r"sourceMappingURL=([^\s*]+)")
 
 
@@ -42,7 +46,7 @@ def probe(target: str) -> dict:
 
     literals = []
     for m in STRING_RE.finditer(text):
-        value = _decode_literal(m.group("s"))
+        value = _decode_literal(m.group(1))
         if KEYWORDS.search(value):
             literals.append(value)
             if len(literals) >= 2500:
@@ -59,6 +63,7 @@ def probe(target: str) -> dict:
     snippets = []
     patterns = [
         r"api\.zwayam",
+        r"darwinbox",
         r"\.post\(",
         r"\.get\(",
         r"HttpClient",
