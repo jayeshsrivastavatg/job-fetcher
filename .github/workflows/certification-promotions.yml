@@ -1,0 +1,19 @@
+name: Certification Promotions
+on:
+  push:
+    branches: [fix/phase4-zero-job-failures]
+    paths: ['.github/workflows/certification-promotions.yml']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        company: [slice, cashfree, clevertap, payu, dream11, chargebee, shiprocket]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
