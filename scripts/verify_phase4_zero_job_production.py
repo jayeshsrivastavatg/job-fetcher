@@ -18,8 +18,16 @@ from job_fetcher.sources.factory import build_source
 
 LOWES_URL = "https://talent.lowes.com/in/en/search-results"
 LOWES_ID_RE = re.compile(r"/in/en/job/(?P<id>JR-[^/?#]+)(?:/|$)", re.I)
-SWIGGY_API = "https://swiggy.mynexthire.com/employer/careers/reqlist/get"
+SWIGGY_BASE = "https://swiggy.mynexthire.com"
+SWIGGY_API = f"{SWIGGY_BASE}/employer/careers/reqlist/get"
+SWIGGY_DETAIL_API = f"{SWIGGY_BASE}/employer/careers/req/get"
 SWIGGY_PAYLOAD = {"source": "careers", "code": "", "filterByBuId": -1}
+SWIGGY_HEADERS = {
+    "User-Agent": "Phase4ExactVerifier/1.0",
+    "Accept": "application/json, text/plain, */*",
+    "Origin": "https://careers.swiggy.com",
+    "Referer": "https://careers.swiggy.com/#/careers",
+}
 INDIA_RE = re.compile(
     r"\b(?:india|bengaluru|bangalore|gurugram|gurgaon|hyderabad|pune|chennai|noida|mumbai|delhi)\b",
     re.I,
@@ -28,7 +36,8 @@ FORCE_INDIA_COMPANIES = {"lowes_india", "swiggy"}
 
 
 def _description_ok(value) -> bool:
-    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    text = re.sub(r"\s+", " ", text).strip()
     return len(text) >= 120
 
 
@@ -48,8 +57,14 @@ def _production(company_id: str) -> dict:
     india = list(usable) if force_india else [
         j for j in usable if INDIA_RE.search(str(j.location or ""))
     ]
-    india_full = [j for j in india if _description_ok(j.description)]
-    india_with_location = [j for j in india if _location_ok(j.location)]
+    full_ids = {
+        str(j.external_id).strip() for j in india
+        if str(j.external_id or "").strip() and _description_ok(j.description)
+    }
+    location_ids = {
+        str(j.external_id).strip() for j in india
+        if str(j.external_id or "").strip() and _location_ok(j.location)
+    }
     return {
         "raw_count": len(raw),
         "jobs": len(usable),
@@ -57,8 +72,10 @@ def _production(company_id: str) -> dict:
         "source_type": type(source).__name__,
         "force_india_scope": force_india,
         "india_jobs": len(india),
-        "india_jobs_with_full_description": len(india_full),
-        "india_jobs_with_location": len(india_with_location),
+        "india_jobs_with_full_description": len(full_ids),
+        "india_jobs_with_location": len(location_ids),
+        "full_description_ids": sorted(full_ids),
+        "location_ids": sorted(location_ids),
         "india_missing_description_ids": sorted(
             str(j.external_id or "") for j in india if not _description_ok(j.description)
         ),
@@ -92,26 +109,58 @@ def _greenhouse_snapshot(board_token: str) -> dict:
 
 
 def _swiggy_snapshot() -> dict:
-    r = requests.post(
-        SWIGGY_API,
-        json=SWIGGY_PAYLOAD,
-        timeout=45,
-        headers={
-            "User-Agent": "Phase4ExactVerifier/1.0",
-            "Accept": "application/json, text/plain, */*",
-            "Origin": "https://careers.swiggy.com",
-            "Referer": "https://careers.swiggy.com/#/careers",
-        },
-    )
+    client = requests.Session()
+    r = client.post(SWIGGY_API, json=SWIGGY_PAYLOAD, timeout=45, headers=SWIGGY_HEADERS)
     r.raise_for_status()
     rows = list((r.json() or {}).get("reqDetailsBOList") or [])
     ids = {str(x.get("reqId")) for x in rows if x.get("reqId") is not None}
-    full_jd_ids = {
-        str(x.get("reqId"))
-        for x in rows
-        if x.get("reqId") is not None and _description_ok(x.get("jdDisplay"))
+    full_jd_ids = set()
+    source_limited_jd_ids = set()
+    detail_status = {}
+
+    for row in rows:
+        if row.get("reqId") is None:
+            continue
+        external_id = str(row.get("reqId"))
+        if _description_ok(row.get("jdDisplay")):
+            full_jd_ids.add(external_id)
+            detail_status[external_id] = "list_full"
+            continue
+
+        # Independently exercise the provider SPA's public detail contract. If it
+        # has richer official text, production must preserve it. If the exact detail
+        # record is still short, record a provider-owned source limitation instead
+        # of fabricating a JD or blaming the scraper for text that does not exist.
+        payload = {"source": "careers", "id": "", "code": "", "reqId": row.get("reqId")}
+        try:
+            detail_response = client.post(
+                SWIGGY_DETAIL_API,
+                json=payload,
+                timeout=45,
+                headers=SWIGGY_HEADERS,
+            )
+            detail_response.raise_for_status()
+            detail = (detail_response.json() or {}).get("reqDetailsBO")
+            returned = str((detail or {}).get("reqId") or "")
+            if returned != external_id:
+                detail_status[external_id] = "detail_id_mismatch"
+                continue
+            if _description_ok((detail or {}).get("jdDisplay")):
+                full_jd_ids.add(external_id)
+                detail_status[external_id] = "detail_full"
+            else:
+                source_limited_jd_ids.add(external_id)
+                detail_status[external_id] = "official_detail_short"
+        except Exception as exc:
+            detail_status[external_id] = f"detail_error:{type(exc).__name__}"
+
+    return {
+        "count": len(rows),
+        "ids": ids,
+        "full_jd_ids": full_jd_ids,
+        "source_limited_jd_ids": source_limited_jd_ids,
+        "detail_status": detail_status,
     }
-    return {"count": len(rows), "ids": ids, "full_jd_ids": full_jd_ids}
 
 
 def _lowes_snapshot() -> dict:
@@ -180,9 +229,27 @@ def verify(company_id: str) -> dict:
     snapshots_complete = (
         len(before["ids"]) == before["count"] and len(after["ids"]) == after["count"]
     )
-    india_jd_complete = (
-        production["india_jobs_with_full_description"] == production["india_jobs"]
-    )
+
+    production_full_ids = set(production["full_description_ids"])
+    official_required_jd_ids = set()
+    official_source_limited_jd_ids = set()
+    if company_id == "swiggy":
+        official_required_jd_ids = stable & (
+            set(before.get("full_jd_ids") or set()) | set(after.get("full_jd_ids") or set())
+        )
+        official_source_limited_jd_ids = stable & (
+            set(before.get("source_limited_jd_ids") or set()) & set(after.get("source_limited_jd_ids") or set())
+        )
+        unresolved_official_jd_ids = stable - official_required_jd_ids - official_source_limited_jd_ids
+        production_missing_available_jd_ids = official_required_jd_ids - production_full_ids
+        india_jd_complete = not production_missing_available_jd_ids and not unresolved_official_jd_ids
+    else:
+        unresolved_official_jd_ids = set()
+        production_missing_available_jd_ids = set(production["india_missing_description_ids"])
+        india_jd_complete = (
+            production["india_jobs_with_full_description"] == production["india_jobs"]
+        )
+
     india_location_complete = (
         production["india_jobs_with_location"] == production["india_jobs"]
     )
@@ -195,9 +262,13 @@ def verify(company_id: str) -> dict:
         and india_jd_complete
         and india_location_complete
     )
+    if passed and official_source_limited_jd_ids:
+        verdict = "CERTIFIED_WITH_SOURCE_JD_LIMITATION"
+    else:
+        verdict = "CERTIFIED" if passed else "FAILED"
     return {
         "company_id": company_id,
-        "verdict": "CERTIFIED" if passed else "FAILED",
+        "verdict": verdict,
         "passed": passed,
         "official_before_count": before["count"],
         "official_before_ids": len(before["ids"]),
@@ -207,6 +278,12 @@ def verify(company_id: str) -> dict:
         "production": production,
         "missing_stable_ids": missing,
         "extra_production_ids": extras,
+        "official_required_jd_ids": sorted(official_required_jd_ids),
+        "official_source_limited_jd_ids": sorted(official_source_limited_jd_ids),
+        "production_missing_available_jd_ids": sorted(production_missing_available_jd_ids),
+        "unresolved_official_jd_ids": sorted(unresolved_official_jd_ids),
+        "official_before_detail_status": before.get("detail_status"),
+        "official_after_detail_status": after.get("detail_status"),
         "official_before_page_counts": before.get("page_counts"),
         "official_after_page_counts": after.get("page_counts"),
         "snapshots_complete": snapshots_complete,
@@ -230,14 +307,19 @@ def main() -> int:
         f"stable_official={result['stable_official_ids']} missing={len(result['missing_stable_ids'])} "
         f"extras={len(result['extra_production_ids'])} "
         f"india_jd={prod['india_jobs_with_full_description']}/{prod['india_jobs']} "
-        f"india_location={prod['india_jobs_with_location']}/{prod['india_jobs']}"
+        f"india_location={prod['india_jobs_with_location']}/{prod['india_jobs']} "
+        f"source_jd_limitations={len(result['official_source_limited_jd_ids'])}"
     )
     if result["missing_stable_ids"]:
         print("MISSING", result["missing_stable_ids"][:100])
     if result["extra_production_ids"]:
         print("EXTRAS", result["extra_production_ids"][:100])
-    if prod["india_missing_description_ids"]:
-        print("INDIA_JD_MISSING", prod["india_missing_description_ids"][:100])
+    if result["production_missing_available_jd_ids"]:
+        print("PRODUCTION_MISSING_AVAILABLE_JD", result["production_missing_available_jd_ids"][:100])
+    if result["official_source_limited_jd_ids"]:
+        print("OFFICIAL_SOURCE_SHORT_JD", result["official_source_limited_jd_ids"][:100])
+    if result["unresolved_official_jd_ids"]:
+        print("OFFICIAL_JD_UNRESOLVED", result["unresolved_official_jd_ids"][:100])
     if prod["india_missing_location_ids"]:
         print("INDIA_LOCATION_MISSING", prod["india_missing_location_ids"][:100])
     return 0 if result["passed"] else 1
