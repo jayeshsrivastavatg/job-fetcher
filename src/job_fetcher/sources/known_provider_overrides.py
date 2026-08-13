@@ -12,6 +12,11 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "razorpay": {"type": "greenhouse", "board_token": "razorpaysoftwareprivatelimited"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
     "hackerrank": {"type": "greenhouse", "board_token": "hackerrank"},
+    # Elastic's branded jobs page is backed by the public Greenhouse board.
+    "elastic": {"type": "greenhouse", "board_token": "elastic"},
+    # Druva's branded detail URLs carry gh_jid and its public applications use
+    # Greenhouse's `for=druva` board token. Prefer that enumerable board directly.
+    "druva": {"type": "greenhouse", "board_token": "druva"},
     # Qualtrics' employer-branded pages expose the same current vacancy IDs on its
     # public Greenhouse board. Use the enumerable board directly so a frontend
     # rendering failure cannot turn a live Qualtrics board into a false zero.
@@ -46,7 +51,18 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
     "arista_networks": {"type": "smartrecruiters", "company_identifier": "AristaNetworks"},
     "nagarro": {"type": "smartrecruiters", "company_identifier": "Nagarro1"},
+    # Both identifiers are visible on the providers' current public career boards.
+    "zomato_blinkit": {"type": "smartrecruiters", "company_identifier": "Zomato1"},
+    "dynatrace": {"type": "smartrecruiters", "company_identifier": "Dynatrace1"},
     "mindtickle": {"type": "lever", "site": "mindtickle"},
+    # Slice's branded discovery already resolves to canonical careers.kula.ai URLs;
+    # route directly instead of making StrictAuto rediscover Kula every run.
+    "slice": {
+        "type": "kula",
+        "entry_url": "https://careers.kula.ai/slice",
+        "tenant": "slice",
+        "max_jobs": 5000,
+    },
     "broadcom_vmware": {
         "type": "workday", "host": "broadcom.wd1.myworkdayjobs.com",
         "tenant": "broadcom", "site": "External_Career", "locale": "en-US",
@@ -74,6 +90,18 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "sprinklr": {
         "type": "workday", "host": "sprinklr.wd1.myworkdayjobs.com",
         "tenant": "sprinklr", "site": "careers", "locale": "en-US",
+    },
+    # The previous generic audit had already captured Workday records from both
+    # boards. Pin the exact tenant/site so production uses CXS JSON immediately.
+    "target_india": {
+        "type": "workday", "host": "target.wd5.myworkdayjobs.com",
+        "tenant": "target", "site": "targetcareers", "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "home_depot_tech": {
+        "type": "workday", "host": "homedepot.wd5.myworkdayjobs.com",
+        "tenant": "homedepot", "site": "CareerDepot", "locale": "en-US",
+        "max_jobs": 10000,
     },
 }
 
