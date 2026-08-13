@@ -20,7 +20,7 @@ from job_fetcher.sources.http_client import session, timeout_seconds
 SCHEMA_VERSION = 1
 ACCESS_RESTRICTED = {401, 403, 429}
 DEAD_DETAIL_CODES = {404, 410}
-STRUCTURED_TYPES = {"greenhouse", "lever", "ashby", "workday", "smartrecruiters"}
+STRUCTURED_TYPES = {"greenhouse", "lever", "ashby", "workday", "smartrecruiters", "oracle"}
 PROVIDER_OVERRIDE_BOARDS = {
     "snowflake": ("ashby", "snowflake"),
     "confluent": ("ashby", "confluent"),
@@ -179,6 +179,41 @@ def _smartrecruiters_count(ident: str) -> tuple[int, str]:
     return int(r.json().get("totalFound") or 0), "SmartRecruiters API reported totalFound"
 
 
+def _oracle_count(src: dict) -> tuple[int, str]:
+    """Read Oracle Candidate Experience's own current vacancy total.
+
+    This is intentionally restricted to the structured recruitingCE collection.
+    The careers.oracle.com public-search mode uses different filtering/paging and
+    keeps its separate witness rather than pretending the unfiltered CE total is
+    comparable.
+    """
+    if src.get("mode") == "public_search":
+        raise ValueError("oracle public_search requires its filtered-page witness")
+    host = str(src.get("host") or "").strip()
+    site = str(src.get("site_number") or "").strip()
+    if not host or not site:
+        raise ValueError("oracle count probe requires host and site_number")
+    finder = f"findReqs;siteNumber={site},limit=1,offset=0,sortBy=POSTING_DATES_DESC"
+    r = session().get(
+        f"https://{host}/hcmRestApi/resources/11.13.18.05/recruitingCEJobRequisitions",
+        params={"finder": finder, "onlyData": "true"},
+        timeout=timeout_seconds(), headers={"Accept": "application/json"},
+    )
+    r.raise_for_status()
+    data = r.json()
+    totals = []
+    if isinstance(data, dict):
+        total = data.get("TotalJobsCount")
+        if isinstance(total, int):
+            totals.append(total)
+        for wrapper in data.get("items") or []:
+            if isinstance(wrapper, dict) and isinstance(wrapper.get("TotalJobsCount"), int):
+                totals.append(wrapper["TotalJobsCount"])
+    if not totals:
+        raise ValueError("Oracle Candidate Experience response did not expose TotalJobsCount")
+    return max(totals), "Oracle Candidate Experience API reported TotalJobsCount"
+
+
 def _amazon_count(company: dict) -> tuple[int, str]:
     src = company.get("source") or {}
     entry = src.get("entry_url") or company.get("career_url") or ""
@@ -222,6 +257,9 @@ def _provider_expected_count(company: dict, source_types: set[str]) -> dict:
         elif source_type == "smartrecruiters" and src.get("company_identifier"):
             count, evidence = _smartrecruiters_count(str(src["company_identifier"]))
             provider = "smartrecruiters"
+        elif source_type == "oracle" and src.get("host") and src.get("site_number") and src.get("mode") != "public_search":
+            count, evidence = _oracle_count(src)
+            provider = "oracle"
         elif cid in PROVIDER_OVERRIDE_BOARDS:
             provider, board = PROVIDER_OVERRIDE_BOARDS[cid]
             count, evidence = _ashby_count(board)
@@ -363,9 +401,6 @@ def audit_company(company: dict, *, sample_size: int = 3, detail_timeout: float 
         else:
             verdict = "CERTIFIED"
     else:
-        # Valid-looking records without an independent/exhaustive count are useful,
-        # but explicitly not certified. This is the key distinction missing from
-        # the old Healthy/Fallback statuses.
         verdict = "UNVERIFIED"
 
     jobs_payload = [_job_record(job) for job in jobs]
@@ -516,45 +551,3 @@ def merge_reports(input_dir: Path, output_dir: Path) -> dict:
         list(by_id.values()), output_dir,
         metadata={"merged_shards": len(files), "source_files": [str(path) for path in files]},
     )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Live source certification for every configured company")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    q = sub.add_parser("audit", help="fetch and certify one deterministic shard of configured companies")
-    q.add_argument("--shard-index", type=int, default=0)
-    q.add_argument("--shard-count", type=int, default=1)
-    q.add_argument("--output-dir", type=Path, default=Path("reports/certification"))
-    q.add_argument("--sample-size", type=int, default=3)
-    q.add_argument("--detail-timeout", type=float, default=10.0)
-
-    q = sub.add_parser("merge", help="merge shard certification JSON reports")
-    q.add_argument("--input-dir", type=Path, required=True)
-    q.add_argument("--output-dir", type=Path, default=Path("reports/certification"))
-
-    args = parser.parse_args()
-    if args.command == "audit":
-        payload = audit(
-            shard_index=args.shard_index,
-            shard_count=args.shard_count,
-            output_dir=args.output_dir,
-            sample_size=args.sample_size,
-            detail_timeout=args.detail_timeout,
-        )
-    else:
-        payload = merge_reports(args.input_dir, args.output_dir)
-
-    summary = payload["summary"]
-    print("=" * 72)
-    print("COMPANY SOURCE CERTIFICATION")
-    print("=" * 72)
-    print(f"Companies:          {summary['companies']}")
-    print(f"Certified:          {summary['certified']}")
-    print(f"Needs attention:    {summary['needs_attention']}")
-    print(f"Needs certification:{summary['needs_certification']}")
-    print(f"Jobs inspected:     {summary['total_jobs_found']}")
-
-
-if __name__ == "__main__":
-    main()
