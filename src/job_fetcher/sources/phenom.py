@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import os
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup
-
-from job_fetcher.models import Job
 from job_fetcher.sources.base import JobSource
-from job_fetcher.sources.generic_extract import clean_text, dedupe, extract_embedded_json, extract_html_links, extract_jsonld
+from job_fetcher.sources.generic_extract import dedupe, extract_embedded_json, extract_html_links, extract_jsonld
 from job_fetcher.sources.http_client import session, timeout_seconds
 from job_fetcher.sources.playwright_auto import PlaywrightAutoSource
 
-SNOWFLAKE_JOB_RE = re.compile(r"/us/en/job/(?P<id>[^/]+)/", re.I)
+
+# Employer-branded Phenom sites use locale-prefixed detail paths such as
+# /us/en/job/123/title and /in/en/job/JR-01234567/title. The segment immediately
+# after /job/ is the stable provider vacancy ID; the remaining slug is presentation.
+PHENOM_JOB_RE = re.compile(r"/(?:[a-z]{2}/[a-z]{2}/)?job/(?P<id>[^/?#]+)(?:/|$)", re.I)
 
 
 class PhenomSource(JobSource):
@@ -60,25 +61,34 @@ class PhenomSource(JobSource):
         out = []
         canonical = (src.get("canonical_base_url") or company.get("career_url") or "").rstrip("/")
         for job in jobs:
-            # Snowflake/Phenom detail URLs are stable and should be preferred.
             jid = None
+            path_is_vacancy = False
             if job.job_url:
-                m = SNOWFLAKE_JOB_RE.search(urlparse(job.job_url).path)
+                parsed = urlparse(job.job_url)
+                m = PHENOM_JOB_RE.search(parsed.path)
                 if m:
                     jid = m.group("id")
+                    path_is_vacancy = True
+
+            # Structured payloads can already carry a provider requisition ID even
+            # when their apply/detail URL has a different route. Keep those, but do
+            # not accept an arbitrary HTML/navigation link merely because it has a URL.
             if not jid and job.external_id:
-                raw = str(job.external_id)
-                if len(raw) >= 8:
+                raw = str(job.external_id).strip()
+                if len(raw) >= 5:
                     jid = raw
-            if not jid and not job.job_url:
+
+            if not jid and not path_is_vacancy:
                 continue
+
             job.company_id = company["id"]
             job.company_name = company["name"]
             job.source_type = "phenom"
             if jid:
                 job.external_id = jid
             if job.job_url:
-                # Keep employer-branded career URL; discard CDN/analytics URLs.
+                # Keep employer-branded career URLs; discard provider CDN/analytics
+                # URLs which generic browser capture can otherwise mistake for jobs.
                 host = urlparse(job.job_url).netloc.lower()
                 if "phenompeople.com" in host and canonical:
                     continue
