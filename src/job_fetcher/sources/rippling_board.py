@@ -36,14 +36,21 @@ class RipplingBoardSource(JobSource):
             url = clean_text(row.get("url"))
             if not job_id or not title or job_id in seen or not self._valid_url(url, tenant, job_id):
                 continue
-            seen.add(job_id)
             location_value = row.get("workLocation")
             location = clean_text(location_value.get("label")) if isinstance(location_value, dict) else clean_text(location_value)
+            if src.get("require_india") and not self._is_india(location):
+                continue
+            seen.add(job_id)
             jobs.append(Job(
                 company["id"], company["name"], "rippling_board",
                 job_id, title, location, None, url, None, row,
             ))
         return jobs
+
+    @staticmethod
+    def _is_india(location):
+        low = str(location or "").casefold()
+        return any(token in low for token in ("india", "bangalore", "bengaluru", "hyderabad"))
 
     @staticmethod
     def _valid_url(url, tenant, job_id):
