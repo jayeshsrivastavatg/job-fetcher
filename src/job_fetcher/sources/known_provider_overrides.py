@@ -62,6 +62,13 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "tenant": "clevertap",
         "max_jobs": 5000,
     },
+    # Chargebee's current public vacancy board is Trakstar Hire. Reuse the same
+    # stable /jobs/<id>/ adapter already used by Dream11 instead of branded-page
+    # extraction.
+    "chargebee": {
+        "type": "trakstar",
+        "entry_url": "https://chargebee.hire.trakstar.com/",
+    },
     "broadcom_vmware": {
         "type": "workday", "host": "broadcom.wd1.myworkdayjobs.com",
         "tenant": "broadcom", "site": "External_Career", "locale": "en-US",
@@ -119,12 +126,6 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "type": "workday", "host": "onehealthineers.wd3.myworkdayjobs.com",
         "tenant": "onehealthineers", "site": "SHSJB", "locale": "en-US",
         "max_jobs": 10000,
-    },
-    "dell": {
-        "type": "oracle",
-        "entry_url": "https://iawmqy.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/careers",
-        "max_jobs": 5000,
-        "page_size": 100,
     },
 }
 
