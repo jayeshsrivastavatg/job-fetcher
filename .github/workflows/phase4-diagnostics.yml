@@ -20,8 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - swiggy
-          - lowes_india
           - makemytrip
           - rakuten_india
           - sony_tech_india
@@ -34,7 +32,7 @@ jobs:
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
-      - name: Probe public career network
+      - name: Probe all public ATS XHR traffic
         run: >-
           python scripts/phase4_network_probe.py
           --target ${{ matrix.target }}
