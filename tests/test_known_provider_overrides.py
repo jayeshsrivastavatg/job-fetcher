@@ -23,6 +23,7 @@ def _company(company_id):
         ("postman", GreenhouseSource, {"type": "greenhouse", "board_token": "postman"}),
         ("inmobi", GreenhouseSource, {"type": "greenhouse", "board_token": "inmobi"}),
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
+        ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
         ("freshworks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Freshworks"}),
         ("arista_networks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "AristaNetworks"}),
         ("nagarro", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Nagarro1"}),
