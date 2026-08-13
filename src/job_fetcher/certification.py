@@ -11,6 +11,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from job_fetcher.config import load_config
+from job_fetcher.extra_count_probes import extra_provider_count
 from job_fetcher.job_quality import plausible_job, prefer_usable_jobs, valid_http_url
 from job_fetcher.service import classify_error
 from job_fetcher.sources.factory import build_source
@@ -180,13 +181,6 @@ def _smartrecruiters_count(ident: str) -> tuple[int, str]:
 
 
 def _oracle_count(src: dict) -> tuple[int, str]:
-    """Read Oracle Candidate Experience's own current vacancy total.
-
-    This is intentionally restricted to the structured recruitingCE collection.
-    The careers.oracle.com public-search mode uses different filtering/paging and
-    keeps its separate witness rather than pretending the unfiltered CE total is
-    comparable.
-    """
     if src.get("mode") == "public_search":
         raise ValueError("oracle public_search requires its filtered-page witness")
     host = str(src.get("host") or "").strip()
@@ -267,13 +261,16 @@ def _provider_expected_count(company: dict, source_types: set[str]) -> dict:
             provider = "amazon"
             count, evidence = _amazon_count(company)
         else:
-            return {
-                "provider": source_type or (sorted(source_types)[0] if len(source_types) == 1 else None),
-                "expected_count": None,
-                "status": "unavailable",
-                "evidence": "no independent/exhaustive count probe is registered for this source",
-                "duration_seconds": round(time.perf_counter() - started, 3),
-            }
+            extra = extra_provider_count(company)
+            if not extra:
+                return {
+                    "provider": source_type or (sorted(source_types)[0] if len(source_types) == 1 else None),
+                    "expected_count": None,
+                    "status": "unavailable",
+                    "evidence": "no independent/exhaustive count probe is registered for this source",
+                    "duration_seconds": round(time.perf_counter() - started, 3),
+                }
+            provider, count, evidence = extra
         return {
             "provider": provider,
             "expected_count": int(count),
