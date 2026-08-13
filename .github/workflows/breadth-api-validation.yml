@@ -17,6 +17,10 @@ on:
       - '.github/workflows/breadth-api-validation.yml'
   workflow_dispatch:
 
+concurrency:
+  group: breadth-api-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
