@@ -1,0 +1,49 @@
+name: Breadth API Validation
+
+on:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - 'src/job_fetcher/sources/known_provider_overrides.py'
+      - 'src/job_fetcher/sources/greenhouse.py'
+      - 'src/job_fetcher/sources/lever.py'
+      - 'src/job_fetcher/sources/smartrecruiters.py'
+      - 'src/job_fetcher/sources/workday.py'
+      - 'src/job_fetcher/sources/kula.py'
+      - 'src/job_fetcher/certification.py'
+      - 'scripts/verify_breadth_batch.py'
+      - '.github/workflows/breadth-api-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        company:
+          - elastic
+          - druva
+          - thoughtworks
+          - zomato_blinkit
+          - dynatrace
+          - meesho
+          - zeta
+          - slice
+          - target_india
+          - home_depot_tech
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install -r requirements.txt && pip install -e .
+      - name: Verify ${{ matrix.company }}
+        env:
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+        run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
