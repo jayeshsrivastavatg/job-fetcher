@@ -22,10 +22,10 @@ jobs:
       max-parallel: 4
       matrix:
         company:
-          - confluent
-          - google
-          - rippling
-          - navi
+          - zerodha
+          - urban_company
+          - cars24
+          - bharatpe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
