@@ -22,12 +22,18 @@ def main():
         if str(effective_source(company).get("type") or "").casefold() != "workday":
             continue
         row = audit_company(deepcopy(company), sample_size=0, detail_timeout=5.0)
+        raw_records = int(row.get("raw_records") or 0)
+        kept = int(row.get("jobs_found") or 0)
+        rejected = int(row.get("rejected_non_job_records") or 0)
+        accounted_dedupe = max(0, raw_records - rejected - kept)
         rows.append({
             "id": row.get("id"),
             "verdict": row.get("verdict"),
-            "jobs_found": row.get("jobs_found"),
+            "raw_records": raw_records,
+            "jobs_found": kept,
             "expected_count": row.get("expected_count"),
-            "rejected_non_job_records": row.get("rejected_non_job_records"),
+            "rejected_non_job_records": rejected,
+            "accounted_duplicate_rows": accounted_dedupe,
             "valid_url_ratio": row.get("valid_url_ratio"),
             "stable_id_ratio": row.get("stable_id_ratio"),
             "failure_category": row.get("failure_category"),
@@ -38,6 +44,13 @@ def main():
     print(json.dumps({
         "workday_companies": len(rows),
         "certified": sum(row["verdict"] == "CERTIFIED" for row in rows),
+        "fully_accounted_raw_boards": [
+            row["id"] for row in rows
+            if isinstance(row.get("expected_count"), int)
+            and row["raw_records"] == row["expected_count"]
+            and row.get("valid_url_ratio") == 1.0
+            and row.get("stable_id_ratio") == 1.0
+        ],
         "not_certified": [row["id"] for row in rows if row["verdict"] != "CERTIFIED"],
     }, ensure_ascii=False), flush=True)
 
