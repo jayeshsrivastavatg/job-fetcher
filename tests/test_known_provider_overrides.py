@@ -7,6 +7,7 @@ from job_fetcher.sources.lever import LeverSource
 from job_fetcher.sources.mynexthire import MyNextHireSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
+from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.workday import WorkdaySource
 import job_fetcher.sources.workday as workday_module
 
@@ -74,6 +75,14 @@ def _company(company_id):
                 "entry_url": "https://careers.kula.ai/slice",
                 "tenant": "slice",
                 "max_jobs": 5000,
+            },
+        ),
+        (
+            "chargebee",
+            TrakstarSource,
+            {
+                "type": "trakstar",
+                "entry_url": "https://chargebee.hire.trakstar.com/",
             },
         ),
         (
