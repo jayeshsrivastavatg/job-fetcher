@@ -1,0 +1,29 @@
+name: Rank Exact Validation
+on:
+  push:
+    branches: [fix/phase4-zero-job-failures]
+    paths:
+      - 'scripts/verify_rank_exact.py'
+      - 'src/job_fetcher/sources/radancy.py'
+      - 'src/job_fetcher/sources/strict_auto.py'
+      - 'src/job_fetcher/extra_count_probes.py'
+      - '.github/workflows/rank-exact-validation.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        rank: [75]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - env:
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+        run: python scripts/verify_rank_exact.py '${{ matrix.rank }}'

@@ -20,6 +20,8 @@ from job_fetcher.sources.atlassian import AtlassianSource
 from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.goldman import GoldmanSource
 from job_fetcher.sources.trakstar import TrakstarSource
+from job_fetcher.sources.mynexthire import MyNextHireSource
+from job_fetcher.sources.zohorecruit import ZohoRecruitSource
 
 SOURCES = {
     "auto": StrictAutoSource,
@@ -44,6 +46,8 @@ SOURCES = {
     "phenom": PhenomSource,
     "goldman": GoldmanSource,
     "trakstar": TrakstarSource,
+    "mynexthire": MyNextHireSource,
+    "zohorecruit": ZohoRecruitSource,
 }
 
 
@@ -100,6 +104,14 @@ def build_source(company):
         from job_fetcher.sources.servicenow import ServiceNowSource
         return ServiceNowSource()
 
+    # Zoho Recruit custom career domains use the distinctive public /jobs/Careers
+    # route and embed the complete openings array in that server-rendered page.
+    source = company.get("source") or {}
+    entry = str(source.get("entry_url") or company.get("career_url") or "").rstrip("/")
+    if source.get("type") == "auto" and entry.endswith("/jobs/Careers"):
+        company["source"] = {"type": "zohorecruit", "entry_url": entry}
+        return ZohoRecruitSource()
+
     # A few employers have moved to a cleaner public provider/API than the source
     # originally discovered for their branded career page.
     if company_id in {"amazon", "snowflake", "confluent"}:
@@ -120,6 +132,9 @@ def build_source(company):
     # visible rather than replaced by plausible-looking navigation links.
     from job_fetcher.sources.known_provider_overrides import known_provider_config
     effective_source = known_provider_config(company_id)
+    if not effective_source:
+        from job_fetcher.sources.breadth_provider_overrides import breadth_provider_config
+        effective_source = breadth_provider_config(company_id)
     if effective_source:
         company["source"] = effective_source
         return build_raw_source(company)

@@ -60,6 +60,7 @@ def test_authoritative_provider_postings_are_not_filtered_as_navigation():
         _job("Finance", "https://acme.wd1.myworkdayjobs.com/en-US/External/job/Test_R1", source="workday"),
         _job("Legal", "https://boards.greenhouse.io/acme/jobs/123", source="greenhouse"),
         _job("Operations", "https://jobs.lever.co/acme/123", source="lever"),
+        _job("Finance", "https://careers.kula.ai/acme/12345", source="kula"),
     ]
     assert [job.title for job in prefer_usable_jobs(jobs)] == [job.title for job in jobs]
 

@@ -1,0 +1,41 @@
+name: Certification Promotions
+on:
+  push:
+    branches: [fix/phase4-zero-job-failures]
+    paths:
+      - 'src/job_fetcher/sources/official_links.py'
+      - 'src/job_fetcher/sources/custom_html.py'
+      - 'src/job_fetcher/sources/zohorecruit.py'
+      - 'src/job_fetcher/sources/factory.py'
+      - 'src/job_fetcher/extra_count_probes.py'
+      - 'src/job_fetcher/certification.py'
+      - 'scripts/verify_all_zohorecruit.py'
+      - '.github/workflows/certification-promotions.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        company: [slice, cashfree, clevertap, payu, dream11, chargebee, shiprocket, scaler]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: python scripts/verify_breadth_batch.py --company '${{ matrix.company }}'
+
+  embedded-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - env:
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+        run: python scripts/verify_all_zohorecruit.py

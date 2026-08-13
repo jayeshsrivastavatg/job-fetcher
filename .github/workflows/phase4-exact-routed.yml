@@ -1,0 +1,52 @@
+name: Phase 4 Exact Routed Providers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - src/job_fetcher/sources/phenom.py
+      - src/job_fetcher/sources/mynexthire.py
+      - src/job_fetcher/sources/factory.py
+      - src/job_fetcher/sources/known_provider_overrides.py
+      - src/job_fetcher/job_quality.py
+      - scripts/verify_phase4_zero_job_production.py
+      - .github/workflows/phase4-exact-routed.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        company:
+          - qualtrics
+          - swiggy
+          - lowes_india
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project and browser
+        run: |
+          python -m pip install -e .
+          python -m playwright install --with-deps chromium
+      - name: Verify exact current coverage and India JD completeness
+        run: >-
+          python scripts/verify_phase4_zero_job_production.py
+          --company ${{ matrix.company }}
+          --output reports/phase4/${{ matrix.company }}-exact.json
+      - name: Upload exact report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-${{ matrix.company }}-exact
+          path: reports/phase4/${{ matrix.company }}-exact.json
+          if-no-files-found: warn
+          retention-days: 14

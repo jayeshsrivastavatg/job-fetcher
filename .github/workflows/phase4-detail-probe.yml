@@ -1,0 +1,46 @@
+name: Phase 4 Detail Contract Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - scripts/phase4_detail_probe.py
+      - .github/workflows/phase4-detail-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - swiggy
+          - lowes_india
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Playwright
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Trace detail page requests
+        run: >-
+          python scripts/phase4_detail_probe.py
+          --target ${{ matrix.target }}
+          --output reports/phase4/${{ matrix.target }}-detail.json
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-${{ matrix.target }}-detail
+          path: reports/phase4/${{ matrix.target }}-detail.json
+          if-no-files-found: warn
+          retention-days: 7

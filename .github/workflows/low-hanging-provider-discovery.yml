@@ -1,0 +1,33 @@
+name: Low-Hanging Provider Discovery
+
+on:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - 'config/companies.yaml'
+      - 'src/job_fetcher/sources/known_provider_overrides.py'
+      - 'src/job_fetcher/sources/breadth_provider_overrides.py'
+      - 'scripts/discover_low_hanging_providers.py'
+      - '.github/workflows/low-hanging-provider-discovery.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: low-hanging-provider-discovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: pip install -r requirements.txt && pip install -e .
+      - name: Scan remaining auto companies
+        env:
+          JOB_FETCHER_HTTP_TIMEOUT: '12'
+        run: python scripts/discover_low_hanging_providers.py

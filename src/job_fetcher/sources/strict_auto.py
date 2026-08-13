@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
 from job_fetcher.job_quality import prefer_usable_jobs
 from job_fetcher.sources.auto import AutoSource, URLISH_RE
+from job_fetcher.sources.radancy import RadancySource
 
 
 class StrictAutoSource(AutoSource):
@@ -19,6 +21,30 @@ class StrictAutoSource(AutoSource):
     records as a successful job list, allowing the crawler to continue to the real
     jobs page/ATS/browser XHR instead.
     """
+
+    def fetch(self, company):
+        src = company.get("source") or {}
+        entry = str(src.get("entry_url") or company.get("career_url") or "")
+        path = urlparse(entry).path.rstrip("/").casefold()
+        if path.endswith("/search-jobs"):
+            candidate = deepcopy(company)
+            candidate["source"] = {
+                "type": "radancy",
+                "entry_url": entry,
+                "locale": src.get("locale", "en"),
+                "max_pages": src.get("max_pages", 100),
+                "hydrate_india_details": True,
+            }
+            try:
+                jobs = RadancySource().fetch(candidate)
+                if jobs:
+                    return jobs
+            except Exception:
+                # Not every site using a search-jobs slug is TalentBrew. If the
+                # public Radancy feed is absent/malformed, retain normal strict-auto
+                # discovery instead of forcing a false provider classification.
+                pass
+        return super().fetch(company)
 
     @staticmethod
     def _extract_static(company, html, url):

@@ -16,6 +16,13 @@ class WorkdaySource(JobSource):
     reporting hundreds/thousands of jobs could silently stop at exactly 40 rows.
     This implementation paces requests, retries premature empty pages, detects
     repeated pages, and refuses to return a known-partial snapshot.
+
+    Workday can also emit an otherwise valid search row with an empty ``title``.
+    Those rows used to be discarded later by the job-quality guard, producing
+    1999/2000-style completeness gaps on large boards. For only those rare rows we
+    hydrate the same vacancy's public CXS detail endpoint and recover the title
+    from ``jobPostingInfo.title``. If detail hydration fails or is still blank, the
+    row remains blank and is still rejected by the normal quality guard.
     """
 
     def fetch(self, company):
@@ -27,6 +34,7 @@ class WorkdaySource(JobSource):
         limit = max(1, min(20, int(src.get("page_size", 20))))
         page_delay = max(0.0, float(src.get("page_delay_seconds", 0.35)))
         empty_retries = max(0, int(src.get("premature_empty_retries", 4)))
+        detail_retries = max(0, int(src.get("missing_title_detail_retries", 2)))
 
         client = session()
         headers = {
@@ -81,22 +89,44 @@ class WorkdaySource(JobSource):
             seen_page_fingerprints.add(fingerprint)
 
             for x in items:
-                ext = x.get("externalPath")
+                ext = clean_text(x.get("externalPath"))
                 job_url = f"https://{host}/{locale}/{site}{ext}" if ext else None
                 bullets = x.get("bulletFields") or []
-                eid = bullets[0] if isinstance(bullets, list) and bullets else None
+                eid = clean_text(bullets[0]) if isinstance(bullets, list) and bullets else None
+                title = clean_text(x.get("title"))
+                detail_info = None
+
+                if not title and ext:
+                    detail_info = self._fetch_missing_title_detail(
+                        client,
+                        host=host,
+                        tenant=tenant,
+                        site=site,
+                        external_path=ext,
+                        headers=headers,
+                        retries=detail_retries,
+                    )
+                    title = clean_text((detail_info or {}).get("title"))
+                    if not eid:
+                        eid = clean_text((detail_info or {}).get("jobReqId"))
+
+                raw = x
+                if detail_info:
+                    raw = dict(x)
+                    raw["missing_title_detail"] = detail_info
+
                 out.append(
                     Job(
                         company["id"],
                         company["name"],
                         "workday",
-                        clean_text(eid) or job_url,
-                        x.get("title") or "",
-                        clean_text(x.get("locationsText")),
+                        eid or job_url,
+                        title or "",
+                        clean_text(x.get("locationsText")) or clean_text((detail_info or {}).get("location")),
                         None,
                         job_url,
-                        clean_text(x.get("postedOn")),
-                        x,
+                        clean_text(x.get("postedOn")) or clean_text((detail_info or {}).get("postedOn")),
+                        raw,
                     )
                 )
                 if len(out) >= max_jobs:
@@ -140,3 +170,31 @@ class WorkdaySource(JobSource):
             if attempt < attempts - 1:
                 time.sleep(max(0.5, page_delay) * (attempt + 1))
         return last_data, last_items
+
+    @staticmethod
+    def _fetch_missing_title_detail(
+        client,
+        *,
+        host,
+        tenant,
+        site,
+        external_path,
+        headers,
+        retries,
+    ):
+        path = external_path if str(external_path).startswith("/") else f"/{external_path}"
+        url = f"https://{host}/wday/cxs/{tenant}/{site}{path}"
+        attempts = retries + 1
+        for attempt in range(attempts):
+            try:
+                response = client.get(url, timeout=timeout_seconds(), headers=headers)
+                response.raise_for_status()
+                payload = response.json()
+                info = payload.get("jobPostingInfo") if isinstance(payload, dict) else None
+                if isinstance(info, dict) and clean_text(info.get("title")):
+                    return info
+            except Exception:
+                pass
+            if attempt < attempts - 1:
+                time.sleep(0.35 * (attempt + 1))
+        return None

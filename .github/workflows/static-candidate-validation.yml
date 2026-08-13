@@ -1,0 +1,24 @@
+name: Static Candidate Validation
+on:
+  push:
+    branches: [fix/phase4-zero-job-failures]
+    paths:
+      - 'src/job_fetcher/sources/radancy.py'
+      - 'src/job_fetcher/sources/strict_auto.py'
+      - 'scripts/verify_search_board_exact.py'
+      - '.github/workflows/static-candidate-validation.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt && pip install -e .
+      - env:
+          JOB_FETCHER_HTTP_TIMEOUT: '20'
+          JOB_FETCHER_DISABLE_BROWSER: '1'
+        run: python scripts/verify_search_board_exact.py

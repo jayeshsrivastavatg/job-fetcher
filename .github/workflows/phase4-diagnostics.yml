@@ -1,0 +1,48 @@
+name: Phase 4 Zero-Job Diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/phase4-zero-job-failures
+    paths:
+      - scripts/phase4_network_probe.py
+      - .github/workflows/phase4-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - makemytrip
+          - rakuten_india
+          - sony_tech_india
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Playwright
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Probe all public ATS XHR traffic
+        run: >-
+          python scripts/phase4_network_probe.py
+          --target ${{ matrix.target }}
+          --output reports/phase4/${{ matrix.target }}.json
+          --timeout-ms 90000
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-${{ matrix.target }}-diagnostic
+          path: reports/phase4/${{ matrix.target }}.json
+          if-no-files-found: warn
+          retention-days: 7

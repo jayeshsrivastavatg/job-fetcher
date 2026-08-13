@@ -2,8 +2,12 @@ import pytest
 
 from job_fetcher.sources.factory import build_source
 from job_fetcher.sources.greenhouse import GreenhouseSource
+from job_fetcher.sources.kula import KulaSource
 from job_fetcher.sources.lever import LeverSource
+from job_fetcher.sources.mynexthire import MyNextHireSource
+from job_fetcher.sources.phenom import PhenomSource
 from job_fetcher.sources.smartrecruiters import SmartRecruitersSource
+from job_fetcher.sources.trakstar import TrakstarSource
 from job_fetcher.sources.workday import WorkdaySource
 import job_fetcher.sources.workday as workday_module
 
@@ -23,10 +27,88 @@ def _company(company_id):
         ("postman", GreenhouseSource, {"type": "greenhouse", "board_token": "postman"}),
         ("inmobi", GreenhouseSource, {"type": "greenhouse", "board_token": "inmobi"}),
         ("hackerrank", GreenhouseSource, {"type": "greenhouse", "board_token": "hackerrank"}),
+        ("elastic", GreenhouseSource, {"type": "greenhouse", "board_token": "elastic"}),
+        ("druva", GreenhouseSource, {"type": "greenhouse", "board_token": "druva"}),
+        ("thoughtworks", GreenhouseSource, {"type": "greenhouse", "board_token": "thoughtworks"}),
+        ("qualtrics", GreenhouseSource, {"type": "greenhouse", "board_token": "qualtrics"}),
+        (
+            "swiggy",
+            MyNextHireSource,
+            {
+                "type": "mynexthire",
+                "tenant": "swiggy",
+                "base_url": "https://swiggy.mynexthire.com",
+                "source_short_name": "careers",
+                "filter_by_bu_id": -1,
+                "origin": "https://careers.swiggy.com",
+                "referer": "https://careers.swiggy.com/#/careers",
+            },
+        ),
+        (
+            "lowes_india",
+            PhenomSource,
+            {
+                "type": "phenom",
+                "entry_url": "https://talent.lowes.com/in/en/search-results",
+                "canonical_base_url": "https://talent.lowes.com",
+                "browser_max_pages": 20,
+                "browser_max_scrolls": 10,
+                "browser_load_more_clicks": 10,
+                "hydrate_details": True,
+                "detail_workers": 8,
+                "locale": "en-IN",
+            },
+        ),
         ("freshworks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Freshworks"}),
         ("arista_networks", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "AristaNetworks"}),
         ("nagarro", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Nagarro1"}),
+        ("zomato_blinkit", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Zomato1"}),
+        ("dynatrace", SmartRecruitersSource, {"type": "smartrecruiters", "company_identifier": "Dynatrace1"}),
         ("mindtickle", LeverSource, {"type": "lever", "site": "mindtickle"}),
+        ("meesho", LeverSource, {"type": "lever", "site": "meesho"}),
+        ("zeta", LeverSource, {"type": "lever", "site": "zeta"}),
+        (
+            "slice",
+            KulaSource,
+            {
+                "type": "kula",
+                "entry_url": "https://careers.kula.ai/slice",
+                "tenant": "slice",
+                "max_jobs": 5000,
+            },
+        ),
+        (
+            "chargebee",
+            TrakstarSource,
+            {
+                "type": "trakstar",
+                "entry_url": "https://chargebee.hire.trakstar.com/",
+            },
+        ),
+        (
+            "target_india",
+            WorkdaySource,
+            {
+                "type": "workday",
+                "host": "target.wd5.myworkdayjobs.com",
+                "tenant": "target",
+                "site": "targetcareers",
+                "locale": "en-US",
+                "max_jobs": 10000,
+            },
+        ),
+        (
+            "home_depot_tech",
+            WorkdaySource,
+            {
+                "type": "workday",
+                "host": "homedepot.wd5.myworkdayjobs.com",
+                "tenant": "homedepot",
+                "site": "CareerDepot",
+                "locale": "en-US",
+                "max_jobs": 10000,
+            },
+        ),
     ],
 )
 def test_known_branded_pages_are_promoted_to_structured_provider(company_id, expected_cls, expected_source):
