@@ -24,8 +24,10 @@ DEFAULT_COMPANIES = [
     "wells_fargo",
     "mastercard",
     "fidelity",
+    "siemens_healthineers",
+    "dell",
 ]
-KULA_COMPANIES = {"slice", "cashfree", "clevertap"}
+NO_COUNT_PROBE_COMPANIES = {"slice", "cashfree", "clevertap", "dell"}
 
 
 def main() -> int:
@@ -59,10 +61,10 @@ def main() -> int:
         "error": row.get("error"),
     }, indent=2, ensure_ascii=False))
 
-    # Kula has a direct public board adapter but the general certification layer
-    # does not yet expose an independent count probe. For this breadth gate require
-    # non-empty usable output; every provider with a count API must certify exactly.
-    if args.company in KULA_COMPANIES:
+    # Kula and Oracle currently have direct provider adapters but no general
+    # independent-count hook in certification.py. For this breadth gate they must
+    # still return non-empty usable jobs; count-capable providers must be exact.
+    if args.company in NO_COUNT_PROBE_COMPANIES:
         ok = row.get("verdict") in {"CERTIFIED", "UNVERIFIED"} and int(row.get("jobs_found") or 0) > 0
     else:
         ok = row.get("verdict") == "CERTIFIED"
