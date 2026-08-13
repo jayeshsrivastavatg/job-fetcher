@@ -20,6 +20,7 @@ DEFAULT_COMPANIES = [
     "zomato_blinkit",
     "dynatrace",
     "intuit",
+    "american_express",
     "meesho",
     "zeta",
     "slice",
@@ -38,6 +39,7 @@ DEFAULT_COMPANIES = [
 KULA_JOB_RE = re.compile(r"^/(?P<tenant>[^/]+)/(?:jobs/)?(?P<id>\d+)(?:/(?:apply)?)?/?$", re.I)
 TRAKSTAR_JOB_RE = re.compile(r"/jobs/(?P<id>[a-z0-9_-]+)(?:[/?#]|$)", re.I)
 SUCCESSFACTORS_TOTAL_RE = re.compile(r"Results\s+\d+\s*[–—-]\s*\d+\s+of\s+(?P<total>\d+)", re.I)
+ORACLE_PUBLIC_TOTAL_RE = re.compile(r"\b(?P<total>\d[\d,]*)\s+Open Jobs\b", re.I)
 
 
 def _get_html(url: str) -> tuple[str, str]:
@@ -119,8 +121,32 @@ def _successfactors_witness(company: dict) -> dict:
     }
 
 
+def _oracle_public_witness(company: dict) -> dict:
+    src = company.get("source") or {}
+    entry = str(src.get("entry_url") or company.get("career_url") or "").strip()
+    if not entry:
+        return {"provider": "oracle_public", "status": "unavailable", "expected_count": None}
+    html, _ = _get_html(entry)
+    text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+    match = ORACLE_PUBLIC_TOTAL_RE.search(text)
+    if not match:
+        return {
+            "provider": "oracle_public",
+            "status": "unavailable",
+            "expected_count": None,
+            "evidence": "public Oracle career page did not expose an Open Jobs total",
+        }
+    return {
+        "provider": "oracle_public",
+        "status": "verified",
+        "expected_count": int(match.group("total").replace(",", "")),
+        "evidence": "independent public Oracle career-page Open Jobs total",
+    }
+
+
 def _extra_witness(company: dict, row: dict) -> dict | None:
-    source_type = str((company.get("source") or {}).get("type") or "").casefold()
+    source = company.get("source") or {}
+    source_type = str(source.get("type") or "").casefold()
     source_types = {str(x).casefold() for x in row.get("source_types") or []}
     # build_source() may promote an `auto` company in-place while audit_company runs.
     if source_type == "kula" or "kula" in source_types:
@@ -129,6 +155,8 @@ def _extra_witness(company: dict, row: dict) -> dict | None:
         return _trakstar_witness(company)
     if source_type == "successfactors" or "successfactors" in source_types:
         return _successfactors_witness(company)
+    if source_type == "oracle" and source.get("mode") == "public_search":
+        return _oracle_public_witness(company)
     return None
 
 
