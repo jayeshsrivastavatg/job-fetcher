@@ -49,6 +49,22 @@ def test_phenom_normalization_rejects_navigation_links_without_job_identity():
     assert jobs == []
 
 
+def test_phenom_rejects_navigation_url_copied_into_external_id():
+    jobs = PhenomSource._normalize(
+        _company(),
+        [
+            _job(
+                "https://talent.lowes.com/in/en/home",
+                external_id="https://talent.lowes.com/i/in/en/home",
+                title="Current Associates",
+            )
+        ],
+        {"canonical_base_url": "https://talent.lowes.com"},
+    )
+
+    assert jobs == []
+
+
 def test_structured_phenom_row_with_external_id_survives_nonstandard_apply_url():
     jobs = PhenomSource._normalize(
         _company(),
