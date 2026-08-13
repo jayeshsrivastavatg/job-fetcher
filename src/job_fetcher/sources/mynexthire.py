@@ -22,13 +22,18 @@ def _text(value) -> str | None:
     return text or None
 
 
+def _description_chars(value) -> int:
+    return len(re.sub(r"\s+", " ", _text(value) or "").strip())
+
+
 class MyNextHireSource(JobSource):
     """Public MyNextHire career-board inventory.
 
     The employer's own careers UI calls ``/employer/careers/reqlist/get`` without
-    authentication and receives the complete current requisition list. The rows
-    contain the stable ``reqId`` plus title, location, approval timestamp and the
-    full displayed JD, so no browser/link heuristics are needed.
+    authentication and receives the complete current requisition list. Rows contain
+    stable ``reqId`` values plus title/location/JD metadata. A few tenants publish a
+    short/empty list JD, so those rows are re-read through the same public careers
+    detail contract used by the provider SPA; we never synthesize missing text.
     """
 
     def fetch(self, company):
@@ -45,15 +50,16 @@ class MyNextHireSource(JobSource):
             "filterByBuId": int(src.get("filter_by_bu_id", -1)),
         }
         client = session()
+        headers = {
+            "Origin": str(src.get("origin") or company.get("career_url") or base).rstrip("/"),
+            "Referer": str(src.get("referer") or company.get("career_url") or base),
+            "Accept": "application/json, text/plain, */*",
+        }
         response = client.post(
             endpoint,
             json=payload,
             timeout=timeout_seconds(),
-            headers={
-                "Origin": str(src.get("origin") or company.get("career_url") or base).rstrip("/"),
-                "Referer": str(src.get("referer") or company.get("career_url") or base),
-                "Accept": "application/json, text/plain, */*",
-            },
+            headers=headers,
         )
         response.raise_for_status()
         body = response.json() or {}
@@ -63,6 +69,7 @@ class MyNextHireSource(JobSource):
 
         jobs = []
         seen = set()
+        min_jd_chars = max(1, int(src.get("detail_hydrate_below_chars", 120)))
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -75,9 +82,30 @@ class MyNextHireSource(JobSource):
                 continue
             seen.add(external_id)
 
-            location = _text(row.get("location") or row.get("locationAddress"))
+            effective = dict(row)
+            detail_meta = None
+            if _description_chars(effective.get("jdDisplay")) < min_jd_chars:
+                detail_meta = self._fetch_detail(
+                    client=client,
+                    base=base,
+                    headers=headers,
+                    src=src,
+                    external_id=external_id,
+                )
+                detail_row = (detail_meta or {}).get("row")
+                if isinstance(detail_row, dict):
+                    # Only use the detail record when the provider returned the exact
+                    # requisition we requested. Prefer richer official values; never
+                    # overwrite a better list value with an empty/short detail value.
+                    if _description_chars(detail_row.get("jdDisplay")) > _description_chars(effective.get("jdDisplay")):
+                        effective["jdDisplay"] = detail_row.get("jdDisplay")
+                    for key in ("location", "locationAddress", "locationList", "approvedOn"):
+                        if not effective.get(key) and detail_row.get(key):
+                            effective[key] = detail_row.get(key)
+
+            location = _text(effective.get("location") or effective.get("locationAddress"))
             if not location:
-                locations = row.get("locationList") or []
+                locations = effective.get("locationList") or []
                 pieces = []
                 for item in locations:
                     if isinstance(item, dict):
@@ -93,12 +121,48 @@ class MyNextHireSource(JobSource):
                 external_id=external_id,
                 title=title,
                 location=location,
-                description=_text(row.get("jdDisplay")),
+                description=_text(effective.get("jdDisplay")),
                 job_url=f"{base}/employer/jobs/careers?reqId={external_id}",
-                posted_at=_text(row.get("approvedOn")),
-                raw=row,
+                posted_at=_text(effective.get("approvedOn")),
+                raw={
+                    "listing": row,
+                    "detail": (detail_meta or {}).get("raw"),
+                    "detail_status": (detail_meta or {}).get("status"),
+                },
             ))
 
         if rows and not jobs:
             raise RuntimeError("mynexthire_rows_without_valid_requisitions")
         return jobs
+
+    @staticmethod
+    def _fetch_detail(*, client, base, headers, src, external_id):
+        endpoint = f"{base}/employer/careers/req/get"
+        payload = {
+            "source": str(src.get("source_short_name") or "careers"),
+            "id": str(src.get("id") or ""),
+            "code": str(src.get("code") or ""),
+            "reqId": int(external_id) if external_id.isdigit() else external_id,
+        }
+        try:
+            response = client.post(
+                endpoint,
+                json=payload,
+                timeout=timeout_seconds(),
+                headers=headers,
+            )
+            response.raise_for_status()
+            body = response.json() or {}
+            row = body.get("reqDetailsBO")
+            if not isinstance(row, dict):
+                return {"status": "invalid_payload", "raw": body, "row": None}
+            returned = str(row.get("reqId") or "").strip()
+            if returned != external_id:
+                return {"status": "id_mismatch", "raw": body, "row": None}
+            return {"status": "matched", "raw": body, "row": row}
+        except Exception as exc:
+            return {
+                "status": f"error:{type(exc).__name__}",
+                "raw": {"error": str(exc)},
+                "row": None,
+            }
