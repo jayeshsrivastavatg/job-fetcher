@@ -16,6 +16,18 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     # public Greenhouse board. Use the enumerable board directly so a frontend
     # rendering failure cannot turn a live Qualtrics board into a false zero.
     "qualtrics": {"type": "greenhouse", "board_token": "qualtrics"},
+    # Swiggy's current official careers SPA delegates its vacancy inventory to the
+    # public MyNextHire board. The response is complete and already contains stable
+    # reqIds plus full displayed JDs, unlike the obsolete HireXP list page.
+    "swiggy": {
+        "type": "mynexthire",
+        "tenant": "swiggy",
+        "base_url": "https://swiggy.mynexthire.com",
+        "source_short_name": "careers",
+        "filter_by_bu_id": -1,
+        "origin": "https://careers.swiggy.com",
+        "referer": "https://careers.swiggy.com/#/careers",
+    },
     # Lowe's India is a client-rendered Phenom tenant. The live official page
     # exposes numbered pagination and stable JR-* /in/en/job/... vacancy URLs.
     # Route it to the provider-aware browser adapter instead of StrictAuto, which
