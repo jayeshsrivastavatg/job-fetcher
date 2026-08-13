@@ -31,16 +31,24 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 7
+      max-parallel: 12
       matrix:
         company:
-          - intuit
-          - slice
-          - cashfree
-          - clevertap
-          - payu
-          - dream11
-          - chargebee
+          - postman
+          - razorpay
+          - inmobi
+          - hackerrank
+          - freshworks
+          - arista_networks
+          - nagarro
+          - mindtickle
+          - broadcom_vmware
+          - visa
+          - browserstack
+          - cisco
+          - barclays
+          - hpe
+          - sprinklr
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
