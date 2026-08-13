@@ -26,10 +26,13 @@ class OfficialLinksSource(JobSource):
             url = urljoin(page.url, anchor.get("href") or "")
             match = path_re.match(urlparse(url).path)
             if match:
-                links[url] = match.groupdict().get("id") or match.group(0)
+                links[url] = {
+                    "id": match.groupdict().get("id") or match.group(0),
+                    "title": anchor.get_text(" ", strip=True),
+                }
 
         jobs = []
-        for url, fallback_id in links.items():
+        for url, listing in links.items():
             detail = client.get(url, timeout=timeout_seconds())
             detail.raise_for_status()
             soup = BeautifulSoup(detail.text, "html.parser")
@@ -42,9 +45,10 @@ class OfficialLinksSource(JobSource):
             if not title:
                 h1 = soup.select_one(src.get("detail_title_selector", "h1"))
                 title = h1.get_text(" ", strip=True) if h1 else None
+            title = title or self._text(listing.get("title"))
             jobs.append(Job(
                 company["id"], company["name"], "official_links",
-                external_id or str(fallback_id), title or "", location,
+                external_id or str(listing["id"]), title or "", location,
                 description, url, posted_at, {"listing_url": page.url},
             ))
         return jobs
