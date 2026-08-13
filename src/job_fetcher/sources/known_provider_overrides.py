@@ -17,6 +17,9 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     # Druva's branded detail URLs carry gh_jid and its public applications use
     # Greenhouse's `for=druva` board token. Prefer that enumerable board directly.
     "druva": {"type": "greenhouse", "board_token": "druva"},
+    # Thoughtworks' public application board is Greenhouse; using the board token
+    # avoids the branded site's client-side "view more" extraction entirely.
+    "thoughtworks": {"type": "greenhouse", "board_token": "thoughtworks"},
     # Qualtrics' employer-branded pages expose the same current vacancy IDs on its
     # public Greenhouse board. Use the enumerable board directly so a frontend
     # rendering failure cannot turn a live Qualtrics board into a false zero.
@@ -55,6 +58,9 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "zomato_blinkit": {"type": "smartrecruiters", "company_identifier": "Zomato1"},
     "dynatrace": {"type": "smartrecruiters", "company_identifier": "Dynatrace1"},
     "mindtickle": {"type": "lever", "site": "mindtickle"},
+    # These branded sites currently publish their vacancy inventory through Lever.
+    "meesho": {"type": "lever", "site": "meesho"},
+    "zeta": {"type": "lever", "site": "zeta"},
     # Slice's branded discovery already resolves to canonical careers.kula.ai URLs;
     # route directly instead of making StrictAuto rediscover Kula every run.
     "slice": {
