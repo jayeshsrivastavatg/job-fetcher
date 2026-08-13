@@ -71,11 +71,18 @@ class PhenomSource(JobSource):
                     path_is_vacancy = True
 
             # Structured payloads can already carry a provider requisition ID even
-            # when their apply/detail URL has a different route. Keep those, but do
-            # not accept an arbitrary HTML/navigation link merely because it has a URL.
+            # when their apply/detail URL has a different route. Keep those, but an
+            # extractor sometimes uses the source URL itself as external_id; a URL
+            # or path is not a requisition identity and must never pass this gate.
             if not jid and job.external_id:
                 raw = str(job.external_id).strip()
-                if len(raw) >= 5:
+                parsed_external = urlparse(raw)
+                looks_like_url_or_path = bool(
+                    parsed_external.scheme
+                    or parsed_external.netloc
+                    or raw.startswith(("/", "./", "../"))
+                )
+                if len(raw) >= 5 and not looks_like_url_or_path:
                     jid = raw
 
             if not jid and not path_is_vacancy:
