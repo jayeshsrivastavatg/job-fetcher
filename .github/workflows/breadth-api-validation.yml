@@ -11,7 +11,8 @@ on:
       - 'src/job_fetcher/sources/smartrecruiters.py'
       - 'src/job_fetcher/sources/workday.py'
       - 'src/job_fetcher/sources/kula.py'
-      - 'src/job_fetcher/sources/oracle.py'
+      - 'src/job_fetcher/sources/trakstar.py'
+      - 'src/job_fetcher/sources/successfactors.py'
       - 'src/job_fetcher/certification.py'
       - 'scripts/verify_breadth_batch.py'
       - '.github/workflows/breadth-api-validation.yml'
@@ -27,7 +28,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      max-parallel: 17
+      max-parallel: 18
       matrix:
         company:
           - elastic
@@ -40,13 +41,14 @@ jobs:
           - slice
           - cashfree
           - clevertap
-          - target_india
           - home_depot_tech
           - wells_fargo
           - mastercard
           - fidelity
           - siemens_healthineers
-          - dell
+          - payu
+          - dream11
+          - chargebee
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
