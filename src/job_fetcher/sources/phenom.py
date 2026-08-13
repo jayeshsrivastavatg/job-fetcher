@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 from urllib.parse import urlparse
@@ -21,8 +22,9 @@ class PhenomSource(JobSource):
 
     Phenom tenants often render search results client-side. We first consume any
     server-rendered JobPosting/links, then use the generic browser network capture
-    plus numbered-pagination hardening. No authenticated/private Phenom API is
-    required.
+    plus numbered-pagination hardening. When a tenant enables ``hydrate_details``
+    we enrich each vacancy from the employer's own public detail-page JobPosting
+    JSON-LD; this provides real location/JD data without private Phenom APIs.
     """
 
     def fetch(self, company):
@@ -35,7 +37,7 @@ class PhenomSource(JobSource):
             jobs = self._extract_static(company, r.text, r.url)
             jobs = self._normalize(company, jobs, src)
             if jobs:
-                return jobs
+                return self._hydrate_details(company, jobs, src)
         except Exception as exc:
             static_error = exc
 
@@ -45,7 +47,7 @@ class PhenomSource(JobSource):
         jobs = PlaywrightAutoSource().fetch(company)
         jobs = self._normalize(company, jobs, src)
         if jobs:
-            return jobs
+            return self._hydrate_details(company, jobs, src)
         raise RuntimeError("phenom_no_jobs_detected")
 
     @staticmethod
@@ -55,6 +57,56 @@ class PhenomSource(JobSource):
         jobs.extend(extract_embedded_json(company, html, url, "phenom_embedded_json"))
         jobs.extend(extract_html_links(company, html, url, "phenom_html"))
         return dedupe(jobs)
+
+    @classmethod
+    def _hydrate_details(cls, company, jobs, src):
+        if not src.get("hydrate_details"):
+            return jobs
+        workers = max(1, min(int(src.get("detail_workers", 8)), 16))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(lambda job: cls._hydrate_one(company, job), jobs))
+
+    @staticmethod
+    def _hydrate_one(company, job):
+        if job.description and job.location:
+            return job
+        if not job.job_url or not PHENOM_JOB_RE.search(urlparse(job.job_url).path):
+            return job
+        try:
+            response = session().get(job.job_url, timeout=timeout_seconds(), allow_redirects=True)
+            response.raise_for_status()
+            details = extract_jsonld(company, response.text, response.url, "phenom_job_jsonld")
+            expected = str(job.external_id or "").strip().lower()
+            detail = next(
+                (
+                    candidate
+                    for candidate in details
+                    if str(candidate.external_id or "").strip().lower() == expected
+                ),
+                details[0] if len(details) == 1 else None,
+            )
+            if not detail:
+                return job
+            if detail.location:
+                job.location = detail.location
+            if detail.description:
+                job.description = detail.description
+            if detail.posted_at:
+                job.posted_at = detail.posted_at
+            job.raw = {
+                "listing": job.raw,
+                "detail": detail.raw,
+                "detail_source": "public_jobposting_jsonld",
+            }
+        except Exception as exc:
+            # Inventory is still valuable when a single detail page is transiently
+            # unavailable. Certification separately requires every India row to have
+            # usable detail data, so failures cannot silently become a green result.
+            job.raw = {
+                "listing": job.raw,
+                "detail_hydration_error": f"{type(exc).__name__}: {exc}",
+            }
+        return job
 
     @staticmethod
     def _normalize(company, jobs, src):
