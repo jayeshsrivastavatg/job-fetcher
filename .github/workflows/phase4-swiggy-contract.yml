@@ -15,14 +15,17 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python -m pip install requests
-      - name: Inspect public Swiggy scripts and API
+      - name: Install browser probe dependencies
+        run: |
+          python -m pip install requests playwright
+          python -m playwright install --with-deps chromium
+      - name: Inspect current Swiggy careers ATS traffic
         run: python scripts/probe_swiggy_contract.py
       - name: Upload evidence
         if: always()
