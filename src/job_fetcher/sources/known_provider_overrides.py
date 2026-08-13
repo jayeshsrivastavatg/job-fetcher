@@ -12,6 +12,11 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "razorpay": {"type": "greenhouse", "board_token": "razorpaysoftwareprivatelimited"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
     "hackerrank": {"type": "greenhouse", "board_token": "hackerrank"},
+    # Qualtrics' employer-branded Phenom pages ultimately expose the same current
+    # vacancy IDs on its public Greenhouse board (including gh_jid links). Use the
+    # enumerable Greenhouse inventory directly so a frontend rendering failure can
+    # never turn a live Qualtrics board into a false zero-job result.
+    "qualtrics": {"type": "greenhouse", "board_token": "qualtrics"},
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
     "arista_networks": {"type": "smartrecruiters", "company_identifier": "AristaNetworks"},
     "nagarro": {"type": "smartrecruiters", "company_identifier": "Nagarro1"},
