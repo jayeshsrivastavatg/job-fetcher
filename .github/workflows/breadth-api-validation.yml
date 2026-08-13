@@ -22,10 +22,10 @@ jobs:
       max-parallel: 4
       matrix:
         company:
-          - zerodha
-          - urban_company
-          - cars24
-          - bharatpe
+          - pine_labs
+          - yellow_ai
+          - epam
+          - american_express
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
