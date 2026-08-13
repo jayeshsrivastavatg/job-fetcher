@@ -4,6 +4,8 @@ on:
     branches: [fix/phase4-zero-job-failures]
     paths:
       - 'scripts/verify_hosted_board_india.py'
+      - 'src/job_fetcher/sources/rippling_board.py'
+      - 'src/job_fetcher/sources/recovery_adapters.py'
       - '.github/workflows/hosted-board-validation.yml'
   workflow_dispatch:
 jobs:
