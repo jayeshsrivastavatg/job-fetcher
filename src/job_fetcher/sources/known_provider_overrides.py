@@ -12,21 +12,10 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "razorpay": {"type": "greenhouse", "board_token": "razorpaysoftwareprivatelimited"},
     "inmobi": {"type": "greenhouse", "board_token": "inmobi"},
     "hackerrank": {"type": "greenhouse", "board_token": "hackerrank"},
-    # Elastic's branded jobs page is backed by the public Greenhouse board.
     "elastic": {"type": "greenhouse", "board_token": "elastic"},
-    # Druva's branded detail URLs carry gh_jid and its public applications use
-    # Greenhouse's `for=druva` board token. Prefer that enumerable board directly.
     "druva": {"type": "greenhouse", "board_token": "druva"},
-    # Thoughtworks' public application board is Greenhouse; using the board token
-    # avoids the branded site's client-side "view more" extraction entirely.
     "thoughtworks": {"type": "greenhouse", "board_token": "thoughtworks"},
-    # Qualtrics' employer-branded pages expose the same current vacancy IDs on its
-    # public Greenhouse board. Use the enumerable board directly so a frontend
-    # rendering failure cannot turn a live Qualtrics board into a false zero.
     "qualtrics": {"type": "greenhouse", "board_token": "qualtrics"},
-    # Swiggy's current official careers SPA delegates its vacancy inventory to the
-    # public MyNextHire board. The response is complete and already contains stable
-    # reqIds plus full displayed JDs, unlike the obsolete HireXP list page.
     "swiggy": {
         "type": "mynexthire",
         "tenant": "swiggy",
@@ -36,10 +25,6 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "origin": "https://careers.swiggy.com",
         "referer": "https://careers.swiggy.com/#/careers",
     },
-    # Lowe's India is a client-rendered Phenom tenant. The live official page
-    # exposes numbered pagination and stable JR-* /in/en/job/... vacancy URLs.
-    # Each detail page publishes a standard JobPosting JSON-LD with the full JD and
-    # India location, so hydrate those first-party pages after enumeration.
     "lowes_india": {
         "type": "phenom",
         "entry_url": "https://talent.lowes.com/in/en/search-results",
@@ -54,19 +39,27 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "freshworks": {"type": "smartrecruiters", "company_identifier": "Freshworks"},
     "arista_networks": {"type": "smartrecruiters", "company_identifier": "AristaNetworks"},
     "nagarro": {"type": "smartrecruiters", "company_identifier": "Nagarro1"},
-    # Both identifiers are visible on the providers' current public career boards.
     "zomato_blinkit": {"type": "smartrecruiters", "company_identifier": "Zomato1"},
     "dynatrace": {"type": "smartrecruiters", "company_identifier": "Dynatrace1"},
     "mindtickle": {"type": "lever", "site": "mindtickle"},
-    # These branded sites currently publish their vacancy inventory through Lever.
     "meesho": {"type": "lever", "site": "meesho"},
     "zeta": {"type": "lever", "site": "zeta"},
-    # Slice's branded discovery already resolves to canonical careers.kula.ai URLs;
-    # route directly instead of making StrictAuto rediscover Kula every run.
     "slice": {
         "type": "kula",
         "entry_url": "https://careers.kula.ai/slice",
         "tenant": "slice",
+        "max_jobs": 5000,
+    },
+    "cashfree": {
+        "type": "kula",
+        "entry_url": "https://careers.kula.ai/cashfree",
+        "tenant": "cashfree",
+        "max_jobs": 5000,
+    },
+    "clevertap": {
+        "type": "kula",
+        "entry_url": "https://careers.kula.ai/clevertap",
+        "tenant": "clevertap",
         "max_jobs": 5000,
     },
     "broadcom_vmware": {
@@ -97,8 +90,6 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
         "type": "workday", "host": "sprinklr.wd1.myworkdayjobs.com",
         "tenant": "sprinklr", "site": "careers", "locale": "en-US",
     },
-    # The previous generic audit had already captured Workday records from both
-    # boards. Pin the exact tenant/site so production uses CXS JSON immediately.
     "target_india": {
         "type": "workday", "host": "target.wd5.myworkdayjobs.com",
         "tenant": "target", "site": "targetcareers", "locale": "en-US",
@@ -107,6 +98,21 @@ KNOWN_PROVIDER_CONFIGS: dict[str, dict] = {
     "home_depot_tech": {
         "type": "workday", "host": "homedepot.wd5.myworkdayjobs.com",
         "tenant": "homedepot", "site": "CareerDepot", "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "wells_fargo": {
+        "type": "workday", "host": "wf.wd1.myworkdayjobs.com",
+        "tenant": "wf", "site": "WellsFargoJobs", "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "mastercard": {
+        "type": "workday", "host": "mastercard.wd1.myworkdayjobs.com",
+        "tenant": "mastercard", "site": "CorporateCareers", "locale": "en-US",
+        "max_jobs": 10000,
+    },
+    "fidelity": {
+        "type": "workday", "host": "fmr.wd1.myworkdayjobs.com",
+        "tenant": "fmr", "site": "FidelityCareers", "locale": "en-US",
         "max_jobs": 10000,
     },
 }
